@@ -44,6 +44,9 @@ class EnvoyLLMClient(LLMServerClient):
         base = envoy_address if envoy_address.startswith("http") else f"http://{envoy_address}"
         self._url = f"{base}{_GENERATE_PATH}"
         self._model_name = model_name
+        self._max_tokens = int(
+            config.actor_rollout_ref.rollout.response_length
+        )
 
     async def generate(
         self,
@@ -58,11 +61,14 @@ class EnvoyLLMClient(LLMServerClient):
         body = {
             "model": self._model_name,
             "token_ids": prompt_ids,
-            "sampling_params": sampling_params,
+            "sampling_params": {**sampling_params, "max_tokens": self._max_tokens},
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(self._url, json=body) as resp:
-                resp.raise_for_status()
+                if not resp.ok:
+                    raise RuntimeError(
+                        f"Envoy returned HTTP {resp.status} for {self._url}"
+                    )
                 data = await resp.json()
 
         return _parse_response(data)
@@ -73,5 +79,5 @@ def _parse_response(data: dict) -> TokenOutput:
     token_ids = [int(t) for t in (choice.get("token_ids") or [])]
     stop_reason = choice.get("finish_reason")
     logprobs_content = (choice.get("logprobs") or {}).get("content") or []
-    log_probs = [e["logprob"] for e in logprobs_content] if logprobs_content else None
+    log_probs = [e.get("logprob") for e in logprobs_content] if logprobs_content else None
     return TokenOutput(token_ids=token_ids, log_probs=log_probs, stop_reason=stop_reason)

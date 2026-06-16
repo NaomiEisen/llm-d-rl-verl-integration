@@ -1,7 +1,7 @@
-"""AgentLoopManager for a pre-deployed llm-d stack (EPP + Envoy running externally).
+"""AgentLoopManager that starts EPP + Envoy as a Ray actor and routes via Envoy.
 
-Writes the EPP endpoints YAML so EPP can discover verl's vLLM replicas,
-then routes all generation requests through the pre-deployed Envoy endpoint.
+The LlmdStackActor is pinned to the head node (where GCS runs) so the
+endpoints file is written on the same node that EPP reads from.
 
 YAML config (no verl code changes needed):
     actor_rollout_ref:
@@ -9,64 +9,66 @@ YAML config (no verl code changes needed):
         agent:
           agent_loop_manager_class: llm_d_rl_verl_integration.envoy.agent_loop_manager.EnvoyAgentLoopManager
         custom:
-          envoy_address: "localhost:8081"
-          epp_endpoints_file: /tmp/epp-endpoints.yaml  # must match EPP's config
+          epp_config_file: /path/to/config.yaml
+          epp_endpoints_file: /tmp/epp-endpoints.yaml
+          # envoy_config: /path/to/envoy.yaml  # optional, defaults to bundled
+          # envoy_port: 8081                   # optional
 """
 
 from __future__ import annotations
 
 import logging
 
+import ray
 from omegaconf import OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
 from llm_d_rl_verl_integration.envoy.llm_client import EnvoyLLMClient
-from llm_d_rl_verl_integration.shared.endpoints import write_pd_endpoints, write_rollout_endpoints
+from llm_d_rl_verl_integration.envoy.ray_actor import LlmdStackActor
 from verl.workers.rollout.llm_server import LLMServerClient
+from verl.workers.rollout.replica import RolloutReplicaRegistry
+from llm_d_rl_verl_integration.shared.pd_replica import PDEngineReplicaFactory
+
+
+def _load_llmd_pd():
+    return PDEngineReplicaFactory
+
+
+# Register vllm-llmd-pd at import time — this module is imported before
+# LLMServerManager.create() calls get_rollout_replica_class(), so the
+# registration is always in place when needed.
+RolloutReplicaRegistry.register("vllm-llmd-pd", _load_llmd_pd)
 
 logger = logging.getLogger(__name__)
 
 
 class EnvoyAgentLoopManager(LlmdAgentLoopManager):
-    """Writes endpoint discovery YAML for EPP, then routes via pre-deployed Envoy."""
+    """Starts EPP + Envoy via a Ray actor pinned to the head node, then routes via Envoy."""
 
     def _on_servers_ready(self, server_addresses: list[str]) -> None:
         rollout_cfg = self.rollout_config
-        custom = OmegaConf.to_container(rollout_cfg.get("custom") or {}, resolve=True)
 
-        envoy_address = custom.get("envoy_address")
-        if not envoy_address:
-            raise RuntimeError(
-                "rollout.custom.envoy_address is required for EnvoyAgentLoopManager"
+        self._stack_actor = LlmdStackActor.options(
+            scheduling_strategy=self.head_node_strategy()
+        ).remote()
+
+        pd_mode = getattr(rollout_cfg, "name", None) == "vllm-llmd-pd"
+        server_roles = self.infer_roles(server_addresses, rollout_cfg) if pd_mode else None
+
+        self._envoy_address = ray.get(
+            self._stack_actor.start.remote(
+                server_addresses=server_addresses,
+                model_config=self.model_config,
+                rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
+                server_roles=server_roles,
             )
-        self._envoy_address = envoy_address
-        self._model_name = self.model_config.path
-
-        endpoints_file = custom.get("epp_endpoints_file")
-        if endpoints_file:
-            disagg = getattr(rollout_cfg, "disaggregation", None)
-            pd_mode = bool(disagg and getattr(disagg, "enabled", False))
-            if pd_mode:
-                server_roles = _infer_roles(server_addresses, rollout_cfg)
-                write_pd_endpoints(endpoints_file, server_addresses, server_roles, self.model_config)
-            else:
-                write_rollout_endpoints(endpoints_file, server_addresses, self.model_config)
-            logger.info("[EnvoyAgentLoopManager] wrote endpoints to %s", endpoints_file)
+        )
+        logger.info("[EnvoyAgentLoopManager] Envoy ready at %s", self._envoy_address)
 
     def _create_llm_client(self, server_addresses: list[str]) -> LLMServerClient:
         return EnvoyLLMClient(
             config=self.config,
             load_balancer_handle=self.llm_client._load_balancer,
             envoy_address=self._envoy_address,
-            model_name=self._model_name,
+            model_name=self.model_config.path,
         )
-
-
-def _infer_roles(server_addresses: list[str], rollout_cfg) -> list[str]:
-    disagg = rollout_cfg.disaggregation
-    n_prefill = int(getattr(disagg, "prefill_replicas", 1))
-    n_decode = int(getattr(disagg, "decode_replicas", 1))
-    roles = ["prefill"] * n_prefill + ["decode"] * n_decode
-    if len(roles) < len(server_addresses):
-        roles += ["decode"] * (len(server_addresses) - len(roles))
-    return roles[: len(server_addresses)]

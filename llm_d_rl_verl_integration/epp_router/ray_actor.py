@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @ray.remote
 class EPPRayActorWrapper:
-    """Pinned to one node. Owns the EPP subprocess lifecycle."""
+    """Pinned to the head node. Owns the EPP subprocess lifecycle."""
 
     async def start(
         self,

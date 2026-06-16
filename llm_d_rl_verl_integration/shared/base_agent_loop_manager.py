@@ -15,6 +15,7 @@ from typing import Any
 
 import ray
 from omegaconf import DictConfig
+from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 from verl.experimental.agent_loop.agent_loop import AgentLoopManager
 from verl.workers.rollout.llm_server import LLMServerClient
@@ -74,3 +75,31 @@ class LlmdAgentLoopManager(AgentLoopManager):
         Return ``None`` to keep the original verl client unchanged.
         """
         return None
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def head_node_strategy() -> NodeAffinitySchedulingStrategy:
+        """Return a scheduling strategy that pins a Ray actor to the head node."""
+        gcs_address = ray.get_runtime_context().gcs_address
+        head_ip = gcs_address.split(":")[0]
+        for node in ray.nodes():
+            if node["Alive"] and node["NodeManagerAddress"] == head_ip:
+                return NodeAffinitySchedulingStrategy(node_id=node["NodeID"], soft=False)
+        raise RuntimeError(
+            f"Could not find a live Ray node with GCS IP {head_ip}. "
+            f"Nodes: {[n['NodeManagerAddress'] for n in ray.nodes()]}"
+        )
+
+    @staticmethod
+    def infer_roles(server_addresses: list[str], rollout_cfg: Any) -> list[str]:
+        """Infer prefill/decode roles from disaggregation config."""
+        disagg = rollout_cfg.disaggregation
+        n_prefill = int(getattr(disagg, "prefill_replicas", 1))
+        n_decode = int(getattr(disagg, "decode_replicas", 1))
+        roles = ["prefill"] * n_prefill + ["decode"] * n_decode
+        if len(roles) < len(server_addresses):
+            roles += ["decode"] * (len(server_addresses) - len(roles))
+        return roles[: len(server_addresses)]

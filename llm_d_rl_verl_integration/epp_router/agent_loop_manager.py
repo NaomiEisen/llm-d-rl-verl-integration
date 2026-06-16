@@ -1,6 +1,6 @@
 """AgentLoopManager that launches EPP and routes via gRPC ext-proc.
 
-YAML config (no verl code changes needed):
+To use, set in the training YAML config:
 
   Non-PD (standard vllm):
     actor_rollout_ref:
@@ -18,7 +18,7 @@ YAML config (no verl code changes needed):
       rollout:
         name: vllm-llmd-pd          # registers PDEngineReplicaFactory at import time
         disaggregation:
-          prefill_replicas: 2       # do NOT set enabled=True (not needed, avoids NotImplementedError)
+          prefill_replicas: 2       # do NOT set enabled=True (avoids NotImplementedError from verl)
           decode_replicas: 2
         agent:
           agent_loop_manager_class: llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager
@@ -75,7 +75,7 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
 
         server_roles = None
         if self._pd_mode:
-            server_roles = _infer_roles(server_addresses, rollout_cfg)
+            server_roles = self.infer_roles(server_addresses, rollout_cfg)
 
         # Model name for EPP / generate body.
         self._model_name = self.model_config.path
@@ -95,8 +95,10 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
                 )
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
 
-        # Launch EPP via a Ray actor.
-        epp_actor = EPPRayActorWrapper.remote()
+        # Launch EPP via a Ray actor pinned to the head node.
+        epp_actor = EPPRayActorWrapper.options(
+            scheduling_strategy=self.head_node_strategy()
+        ).remote()
 
         self._grpc_addr = ray.get(
             epp_actor.start.remote(
@@ -121,11 +123,3 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         )
 
 
-def _infer_roles(server_addresses: list[str], rollout_cfg) -> list[str]:
-    disagg = rollout_cfg.disaggregation
-    n_prefill = int(getattr(disagg, "prefill_replicas", 1))
-    n_decode = int(getattr(disagg, "decode_replicas", 1))
-    roles = ["prefill"] * n_prefill + ["decode"] * n_decode
-    if len(roles) < len(server_addresses):
-        roles += ["decode"] * (len(server_addresses) - len(roles))
-    return roles[: len(server_addresses)]
