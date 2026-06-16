@@ -7,7 +7,7 @@ YAML config (no verl code changes needed):
     actor_rollout_ref:
       rollout:
         agent:
-          agent_loop_manager_class: llm_d_rl_verl_integration.envoy.agent_loop_manager.EnvoyAgentLoopManager
+          agent_loop_manager_class: llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager
         custom:
           epp_config_file: /path/to/config.yaml
           epp_endpoints_file: /tmp/epp-endpoints.yaml
@@ -23,8 +23,8 @@ import ray
 from omegaconf import OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.envoy.llm_client import EnvoyLLMClient
-from llm_d_rl_verl_integration.envoy.ray_actor import LlmdStackActor
+from llm_d_rl_verl_integration.llmd_stack.llm_client import EnvoyLLMClient
+from llm_d_rl_verl_integration.llmd_stack.llmd_stack_actor import LlmdStackActor
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
 from llm_d_rl_verl_integration.shared.pd_replica import PDEngineReplicaFactory

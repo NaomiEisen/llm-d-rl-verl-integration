@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @ray.remote
-class EPPRayActorWrapper:
+class EPPActor:
     """Pinned to the head node. Owns the EPP subprocess lifecycle."""
 
     async def start(
@@ -37,7 +37,7 @@ class EPPRayActorWrapper:
 
         host = ray.util.get_node_ip_address()
         grpc_addr = f"{host}:{grpc_port}"
-        logger.info("EPPRayActorWrapper ready at %s", grpc_addr)
+        logger.info("EPPActor ready at %s", grpc_addr)
         return grpc_addr
 
     def stop(self) -> None:

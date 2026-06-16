@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# GRPO | Qwen3-4B | FSDP training | NVIDIA GPUs or Ascend NPUs
+# GRPO | Qwen3-4B | FSDP training | llm-d stack routing (PD disaggregated) | 8 GPUs
 #
-# INFER_BACKEND controls rollout backend: vllm
+# EPP and Envoy are started automatically as Ray actors by EnvoyAgentLoopManager.
+# No manual pre-start needed.
 
 set -xeuo pipefail
 
-# ---- user-adjustable ----
-# DEVICE is auto-detected by probing torch_npu; override only for special cases.
 DEVICE=${DEVICE:-$(python3 -c 'import torch_npu' 2>/dev/null && echo npu || echo gpu)}
 INFER_BACKEND=${INFER_BACKEND:-vllm-llmd-pd}
 MODEL_PATH=${MODEL_PATH:-/tmp/verl/models/Qwen3-4B}
@@ -32,8 +31,11 @@ DECODE_REPLICAS=${DECODE_REPLICAS:-2}
 ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.2}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
+EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config-pd.yaml}
+EPP_ENDPOINTS_FILE=${EPP_ENDPOINTS_FILE:-/tmp/epp-endpoints.yaml}
+
 PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples_pd}
-EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_grpo_vllm_pd_fsdp_8gpu}
+EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_grpo_vllm_envoy_pd_fsdp_8gpu}
 SAVE_FREQ=${SAVE_FREQ:--1}
 TEST_FREQ=${TEST_FREQ:-5}
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-15}
@@ -42,8 +44,6 @@ MAX_STEPS=${MAX_STEPS:-80}
 GENERATIONS_ROOT=${GENERATIONS_ROOT:-/tmp/verl/generations}
 VALIDATION_DATA_DIR=${VALIDATION_DATA_DIR:-${GENERATIONS_ROOT}/val}
 ROLLOUT_DATA_DIR=${ROLLOUT_DATA_DIR:-${GENERATIONS_ROOT}/train}
-
-# ---- end user-adjustable ----
 
 case "${DEVICE}" in
     gpu)
@@ -145,14 +145,13 @@ TRAINER=(
 
 EXTRA=(
     '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs'
-    # --- llm-d EPP router integration (PD mode) ---
+    # --- llm-d Envoy+EPP router integration (PD mode) ---
     # register_pd patches _ROLLOUT_REGISTRY in every FSDP worker before get_rollout_class() runs
     +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.shared.register_pd
-    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager
-    +actor_rollout_ref.rollout.custom.epp_config_file=/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config-pd.yaml
-    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager
+    +actor_rollout_ref.rollout.custom.epp_config_file=${EPP_CONFIG_FILE}
+    +actor_rollout_ref.rollout.custom.epp_endpoints_file=${EPP_ENDPOINTS_FILE}
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2
-    # +actor_rollout_ref.rollout.custom.epp_grpc_port=9002  # default 9002
     # ---
     actor_rollout_ref.rollout.disable_log_stats=False
     actor_rollout_ref.rollout.enable_prefix_caching=True

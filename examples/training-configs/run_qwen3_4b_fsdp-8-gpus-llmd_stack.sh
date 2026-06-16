@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GRPO | Qwen3-4B | FSDP training | Envoy+EPP routing (PD disaggregated) | 8 GPUs
+# GRPO | Qwen3-4B | FSDP training | llm-d stack routing (no PD) | 8 GPUs
 #
 # EPP and Envoy are started automatically as Ray actors by EnvoyAgentLoopManager.
 # No manual pre-start needed.
@@ -7,7 +7,7 @@
 set -xeuo pipefail
 
 DEVICE=${DEVICE:-$(python3 -c 'import torch_npu' 2>/dev/null && echo npu || echo gpu)}
-INFER_BACKEND=${INFER_BACKEND:-vllm-llmd-pd}
+INFER_BACKEND=${INFER_BACKEND:-vllm}
 MODEL_PATH=${MODEL_PATH:-/tmp/verl/models/Qwen3-4B}
 TRAIN_FILE=${TRAIN_FILE:-/tmp/verl/data/gsm8k/train.parquet}
 TEST_FILE=${TEST_FILE:-/tmp/verl/data/gsm8k/test.parquet}
@@ -26,20 +26,18 @@ KL_LOSS_COEF=${KL_LOSS_COEF:-0.001}
 ENTROPY_COEFF=${ENTROPY_COEFF:-0}
 
 ROLLOUT_TP=${ROLLOUT_TP:-2}
-PREFILL_REPLICAS=${PREFILL_REPLICAS:-2}
-DECODE_REPLICAS=${DECODE_REPLICAS:-2}
-ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.2}
+ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.6}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
-EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config-pd.yaml}
+EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config.yaml}
 EPP_ENDPOINTS_FILE=${EPP_ENDPOINTS_FILE:-/tmp/epp-endpoints.yaml}
 
-PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples_pd}
-EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_grpo_vllm_envoy_pd_fsdp_8gpu}
+PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples}
+EXPERIMENT_NAME=${EXPERIMENT_NAME:-qwen3_4b_grpo_vllm_llmd_stack_fsdp_8gpu}
 SAVE_FREQ=${SAVE_FREQ:--1}
 TEST_FREQ=${TEST_FREQ:-5}
 TOTAL_EPOCHS=${TOTAL_EPOCHS:-15}
-MAX_STEPS=${MAX_STEPS:-80}
+MAX_STEPS=${MAX_STEPS:-50}
 
 GENERATIONS_ROOT=${GENERATIONS_ROOT:-/tmp/verl/generations}
 VALIDATION_DATA_DIR=${VALIDATION_DATA_DIR:-${GENERATIONS_ROOT}/val}
@@ -102,22 +100,12 @@ ROLLOUT=(
     actor_rollout_ref.rollout.name=${INFER_BACKEND}
     actor_rollout_ref.rollout.gpu_memory_utilization=${ROLLOUT_GPU_MEM_UTIL}
     actor_rollout_ref.rollout.enable_chunked_prefill=False
-    actor_rollout_ref.rollout.enforce_eager=True
+    actor_rollout_ref.rollout.enforce_eager=False
     actor_rollout_ref.rollout.free_cache_engine=True
     actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=4096
     actor_rollout_ref.rollout.checkpoint_engine.update_weights_bucket_megabytes=4096
     actor_rollout_ref.rollout.n=${ROLLOUT_N}
-    # P/D layout — do NOT set disaggregation.enabled=True; verl only allows that
-    # for sglang. Our PDEngineReplicaFactory is registered as "vllm-llmd-pd" and
-    # expects num_replicas = (prefill + decode), which falls out naturally from
-    # world_size / tp_size when enabled=False.
-    actor_rollout_ref.rollout.disaggregation.prefill_replicas=${PREFILL_REPLICAS}
-    actor_rollout_ref.rollout.disaggregation.decode_replicas=${DECODE_REPLICAS}
-    # NIXL KV transfer
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true
 )
 
 REF=(
@@ -145,13 +133,10 @@ TRAINER=(
 
 EXTRA=(
     '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs'
-    # --- llm-d Envoy+EPP router integration (PD mode) ---
-    # register_pd patches _ROLLOUT_REGISTRY in every FSDP worker before get_rollout_class() runs
-    +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.epp_router.register_pd
-    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.envoy.agent_loop_manager.EnvoyAgentLoopManager
+    # --- llm-d stack routing integration ---
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager
     +actor_rollout_ref.rollout.custom.epp_config_file=${EPP_CONFIG_FILE}
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=${EPP_ENDPOINTS_FILE}
-    +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2
     # ---
     actor_rollout_ref.rollout.disable_log_stats=False
     actor_rollout_ref.rollout.enable_prefix_caching=True

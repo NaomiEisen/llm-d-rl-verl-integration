@@ -36,7 +36,7 @@ import ray
 from omegaconf import DictConfig, OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.epp_router.ray_actor import EPPRayActorWrapper
+from llm_d_rl_verl_integration.epp_router.epp_actor import EPPActor
 from llm_d_rl_verl_integration.epp_router.llm_client import EPPLLMClient
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
@@ -96,7 +96,7 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
 
         # Launch EPP via a Ray actor pinned to the head node.
-        epp_actor = EPPRayActorWrapper.options(
+        epp_actor = EPPActor.options(
             scheduling_strategy=self.head_node_strategy()
         ).remote()
 

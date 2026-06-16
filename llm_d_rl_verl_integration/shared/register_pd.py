@@ -5,7 +5,7 @@ Import this module via verl's model.external_lib hook so that the
 FSDP workers call get_rollout_class().
 
 In the run script:
-    actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.epp_router.register_pd
+    actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.shared.register_pd
 """
 
 from verl.workers.rollout.base import _ROLLOUT_REGISTRY

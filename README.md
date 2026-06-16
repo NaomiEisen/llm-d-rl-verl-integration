@@ -54,7 +54,7 @@ sequenceDiagram
 
 After all vLLM replicas are up:
 
-1. `EPPAgentLoopManager` spawns `EPPRayActorWrapper`, a Ray actor pinned to the head node, passing all replica addresses.
+1. `EPPAgentLoopManager` spawns `EPPActor`, a Ray actor pinned to the head node, passing all replica addresses.
 2. The actor writes `/tmp/epp-endpoints.yaml` and starts the EPP subprocess, waiting until its gRPC health check passes.
 3. The returned EPP gRPC address is passed to `EPPLLMClient`, which is injected into every `AgentLoopWorker`.
 
@@ -117,7 +117,7 @@ After all vLLM replicas are up:
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| `rollout.agent.agent_loop_manager_class` | yes | — | `llm_d_rl_verl_integration.envoy.agent_loop_manager.EnvoyAgentLoopManager` |
+| `rollout.agent.agent_loop_manager_class` | yes | — | `llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager` |
 | `rollout.custom.epp_config_file` | yes | — | Path to EPP YAML config |
 | `rollout.custom.epp_endpoints_file` | yes | — | Path where endpoints YAML is written |
 | `rollout.custom.envoy_config` | no | bundled `envoy.yaml` | Path to Envoy config YAML |
@@ -191,7 +191,7 @@ These keys are required on top of the base integration config when running in PD
 | `rollout.engine_kwargs.vllm.kv_transfer_config.kv_role` | yes | `kv_both` |
 | `rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager` | yes | `true` |
 | `rollout.custom.sidecar_connector` | no | KV connector type passed to `llm-d-routing-sidecar` (default: `nixlv2`) |
-| `model.external_lib` | yes (EPP router only) | `llm_d_rl_verl_integration.epp_router.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
+| `model.external_lib` | yes | `llm_d_rl_verl_integration.shared.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
 
 `prefill_replicas + decode_replicas` must equal `world_size / tp_size` (total GPU count divided by tensor-parallel size).
 
@@ -241,7 +241,8 @@ The training scripts in `examples/training-configs/` are derived from verl's `ex
 |--------|---------|-------------------|
 | `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp.sh` | EPP direct gRPC | no |
 | `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp_pd.sh` | EPP direct gRPC | yes |
-| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-envoy_pd.sh` | Envoy + EPP | yes |
+| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-llmd_stack.sh` | llm-d stack (Envoy + EPP) | no |
+| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-llmd_stack_pd.sh` | llm-d stack (Envoy + EPP) | yes |
 
 For PD scripts, `rollout.name=vllm-llmd-pd` is set along with the disaggregation replica counts and NIXL KV transfer config — see [PD Disaggregation](#pd-disaggregation----vllm-llmd-pd) for the full config reference.
 
