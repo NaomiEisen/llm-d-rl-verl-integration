@@ -208,3 +208,73 @@ NIXL is configured at the vLLM engine level via Hydra params (required for all P
 The sidecar KV connector type is configured via `rollout.custom.sidecar_connector` (default: `nixlv2`).
 
 The EPP config must use the PD-aware profile — `shared/epp-example-config-pd.yaml` — which includes `disagg-profile-handler`, `prefill-filter`, `decode-filter`, and `prefix-based-pd-decider`.  Using the non-PD config causes all requests to be load-balanced across both prefill and decode replicas without role-based routing, and NIXL KV transfer will not happen.
+
+---
+
+## How to run
+
+Running the integration requires three things:
+
+1. **A running Ray cluster** — any Ray cluster works (local, KubeRay, SSH).  The integration assumes the EPP and Envoy binaries are present on the head node (they are bundled in the provided container image).
+2. **Install the integration package** on every node in the cluster:
+   ```bash
+   pip install -e /path/to/llm-d-rl-verl-integration
+   ```
+3. **Run verl's training entry-point** with the integration wired in via Hydra overrides — the two keys that activate the integration are `agent_loop_manager_class` and `epp_config_file`:
+   ```bash
+   python3 -m verl.trainer.main_ppo \
+       ... \
+       +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager \
+       +actor_rollout_ref.rollout.custom.epp_config_file=/path/to/epp-config.yaml \
+       +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml
+   ```
+
+   No other verl source changes or pre-start steps are needed.  EPP (and Envoy, in the Envoy+EPP integration) are started automatically as Ray actors by the manager after all vLLM replicas are up.
+
+### KubeRay example
+
+`examples/ray-cluster.yaml` deploys a single-node 8-GPU cluster: a headless ray-head pod (no GPU, runs the driver and GCS) and a ray-worker pod with 8 GPUs.  The `postStart` hook pre-downloads GSM8K and Qwen3-4B so training can start immediately once the pods are ready.
+
+The training scripts in `examples/training-configs/` are derived from verl's `examples/grpo_trainer/run_qwen3_4b_fsdp.sh` — same GRPO/Qwen3-4B/FSDP defaults — with an `EXTRA` block that adds the integration Hydra overrides.  The only difference between the EPP-as-router and Envoy+EPP variants is the `agent_loop_manager_class`:
+
+| Script | Routing | PD disaggregation |
+|--------|---------|-------------------|
+| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp.sh` | EPP direct gRPC | no |
+| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp_pd.sh` | EPP direct gRPC | yes |
+| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-envoy_pd.sh` | Envoy + EPP | yes |
+
+For PD scripts, `rollout.name=vllm-llmd-pd` is set along with the disaggregation replica counts and NIXL KV transfer config — see [PD Disaggregation](#pd-disaggregation----vllm-llmd-pd) for the full config reference.
+
+---
+
+## Debug logging
+
+All integration components default to quiet logging.  Set these env vars to increase verbosity — either in the shell before launching training, or in the `env:` section of your KubeRay `RayCluster` / `RayJob` container spec.
+
+| Env var | Component | Default | Debug value |
+|---------|-----------|---------|-------------|
+| `VERL_VLLM_LOG_LEVEL` | vLLM inside prefill and decode replicas (`VLLM_LOGGING_LEVEL`) | unset (vLLM default) | `DEBUG` |
+| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `5` |
+| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `5` |
+| `VERL_ENVOY_LOG_LEVEL` | Envoy proxy (`--log-level`) | `info` | `debug` |
+
+Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.  Use one of the two methods below.
+
+**Hydra params** — pass via `ray_kwargs.ray_init.runtime_env.env_vars`, which verl forwards to every Ray worker at cluster init:
+
+```bash
+'+ray_kwargs.ray_init.runtime_env.env_vars.VERL_SIDECAR_LOG_LEVEL=5' \
+'+ray_kwargs.ray_init.runtime_env.env_vars.VERL_EPP_VERBOSITY=5'
+```
+
+**KubeRay** — set in the container spec; vars are present before Ray starts:
+
+```yaml
+containers:
+  - name: ray-worker
+    env:
+      - name: VERL_VLLM_LOG_LEVEL
+        value: "DEBUG"
+      - name: VERL_EPP_VERBOSITY
+        value: "5"
+```

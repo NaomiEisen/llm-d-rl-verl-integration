@@ -15,7 +15,7 @@ import grpc
 logger = logging.getLogger(__name__)
 
 _EPP_BINARY = "/usr/local/bin/epp"
-_EPP_DEBUG_LOG = "/tmp/epp_debug.log"
+_EPP_DEBUG_LOG = "/tmp/epp.log"
 DEFAULT_EPP_GRPC_PORT = 9002
 DEFAULT_EPP_HEALTH_PORT = 9003
 
@@ -102,7 +102,7 @@ class EPPLauncher:
             "--metrics-port", "9090",
             "--secure-serving=false",
             "--tracing=false",
-            "-v=5",
+            f"-v={os.environ.get('VERL_EPP_VERBOSITY', '0')}",
         ]
 
         env = {**os.environ, "POD_NAME": pod_name}

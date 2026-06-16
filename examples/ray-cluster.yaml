@@ -1,0 +1,264 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: verl-cluster
+  namespace: <your-namespace>
+spec:
+  rayVersion: '2.47.1'
+  headGroupSpec:
+    rayStartParams:
+      num-cpus: "4"
+    template:
+      spec:
+        # Prefer the same node as the worker pod  when possible.
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  - <node-name>
+        containers:
+        - name: ray-head
+          image: ghcr.io/naomieisen/verl:incubation
+          imagePullPolicy: Always
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/bash
+                - -c
+                - |
+                  exec > /tmp/setup_log.txt 2>&1
+                  echo "Starting setup..."
+
+                  # Prepare data and prefetch the model.
+                  mkdir -p /tmp/verl/hf_cache/datasets
+
+                  # Generate training data
+                  python3 /opt/verl/examples/data_preprocess/gsm8k.py --local_save_dir /tmp/verl/data/gsm8k
+
+                  # Pre-fetch model weights (tokenizer/config only on head)
+                  python3 -c "
+                  from huggingface_hub import snapshot_download
+                  snapshot_download('Qwen/Qwen3-4B', local_dir='/tmp/verl/models/Qwen3-4B',
+                      ignore_patterns=['*.safetensors', '*.bin', '*.pt'],
+                      local_dir_use_symlinks=False)
+                  "
+                  echo "Setup complete" > /tmp/verl_ready.txt
+          env:
+          # --- Runtime paths ---
+          - name: HOME
+            value: "/tmp"
+          - name: PYTHONPATH
+            value: "/tmp/llm-d-rl-verl-integration"
+          - name: PYTHONUSERBASE
+            value: "/tmp/.local"
+
+          # --- HuggingFace cache ---
+          - name: HF_HOME
+            value: "/tmp/verl/hf_cache"
+          - name: HF_DATASETS_CACHE
+            value: "/tmp/verl/hf_cache/datasets"
+          - name: XDG_CACHE_HOME
+            value: "/tmp/verl/hf_cache"
+          - name: HUGGINGFACE_HUB_CACHE
+            value: "/tmp/verl/hf_cache"
+
+          # --- Compile / framework caches ---
+          - name: TRITON_CACHE_DIR
+            value: "/tmp/triton"
+          - name: FLASHINFER_WORKSPACE_DIR
+            value: "/tmp/flashinfer"
+
+          # --- Experiment tracking ---
+          - name: WANDB_MODE
+            value: "offline"
+
+          # --- verl logging ---
+          - name: VERL_LOGGING_LEVEL
+            value: "INFO"
+          - name: VERL_FILE_LOGGER_ROOT
+            value: "/tmp/verl/logs"
+
+          # --- vLLM / Ray settings ---
+          - name: VLLM_USE_V1
+            value: "1"
+          - name: TOKENIZERS_PARALLELISM
+            value: "false"
+          - name: OMP_NUM_THREADS
+            value: "1"
+
+          # --- NCCL ---
+          - name: NCCL_DEBUG
+            value: "INFO"
+
+          # --- llm-d integration debug logging (default: quiet) ---
+          # Uncomment to enable verbose output from integration components.
+          # See README ## Debug logging for details.
+          # - name: VERL_VLLM_LOG_LEVEL
+          #   value: "DEBUG"
+          # - name: VERL_SIDECAR_LOG_LEVEL
+          #   value: "5"
+          # - name: VERL_EPP_VERBOSITY
+          #   value: "5"
+          # - name: VERL_ENVOY_LOG_LEVEL
+          #   value: "debug"
+
+          resources:
+            limits:
+              cpu: "32"
+              memory: "96G"
+              # No GPU on head — it only runs the driver (fit() loop) and Ray GCS.
+              # FSDP training and NCCL broadcast happen on worker pods.
+            requests:
+              cpu: "24"
+              memory: "64G"
+          ports:
+          - containerPort: 6379
+            name: gcs-server
+          - containerPort: 8265
+            name: dashboard
+          - containerPort: 10001
+            name: client
+          - containerPort: 8081
+            name: envoy
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /etc/verl-configs
+            name: verl-configs
+            readOnly: true
+        volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "32Gi"
+        - name: verl-configs
+          configMap:
+            name: verl-config-epp
+
+  workerGroupSpecs:
+  # GPU workers: resource requests must match verl-training-config.yaml pool sizes.
+  # Current verl config uses 1 training GPU + 1 standalone rollout GPU on one node
+  # (trainer.n_gpus_per_node=1, rollout.n_gpus_per_node=1) → 2 GPUs per worker pod.
+  # Raise replicas/maxReplicas only if you add nodes and adjust verl nnodes / n_gpus_per_node.
+  - groupName: fsdp-workers
+    replicas: 1
+    minReplicas: 1
+    maxReplicas: 1
+    rayStartParams:
+      num-cpus: "48"   # limit Ray's visible CPUs to reduce internal thread spawning
+    template:
+      spec:
+        # Prefer the same node as the head pod — EPP and Envoy run on the head node,
+        # so co-locating workers avoids cross-node traffic on every generation request.
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                  - <node-name>
+        containers:
+        - name: ray-worker
+          image: ghcr.io/naomieisen/verl:incubation
+          imagePullPolicy: Always
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /bin/bash
+                - -c
+                - |
+                  exec > /tmp/setup_log.txt 2>&1
+                  mkdir -p /tmp/verl/hf_cache/datasets
+                  python3 /opt/verl/examples/data_preprocess/gsm8k.py --local_save_dir /tmp/verl/data/gsm8k
+                  # Full model weights for FSDP training + vLLM rollout
+                  python3 -c "
+                  from huggingface_hub import snapshot_download
+                  snapshot_download('Qwen/Qwen3-4B', local_dir='/tmp/verl/models/Qwen3-4B',
+                      local_dir_use_symlinks=False)
+                  "
+                  echo "Setup complete" > /tmp/verl_ready.txt
+          env:
+          # --- Runtime paths ---
+          - name: HOME
+            value: "/tmp"
+          - name: PYTHONPATH
+            value: "/tmp/llm-d-rl-verl-integration"
+          - name: PYTHONUSERBASE
+            value: "/tmp/.local"
+
+          # --- HuggingFace cache ---
+          - name: HF_HOME
+            value: "/tmp/verl/hf_cache"
+          - name: HF_DATASETS_CACHE
+            value: "/tmp/verl/hf_cache/datasets"
+          - name: XDG_CACHE_HOME
+            value: "/tmp/verl/hf_cache"
+          - name: HUGGINGFACE_HUB_CACHE
+            value: "/tmp/verl/hf_cache"
+
+          # --- Compile / framework caches ---
+          - name: TRITON_CACHE_DIR
+            value: "/tmp/triton"
+
+          # --- Experiment tracking ---
+          - name: WANDB_MODE
+            value: "offline"
+
+          # --- verl logging ---
+          - name: VERL_LOGGING_LEVEL
+            value: "INFO"
+
+          # --- vLLM / Ray settings ---
+          - name: VLLM_USE_V1
+            value: "1"
+          - name: PYTORCH_CUDA_ALLOC_CONF
+            # CuMemAllocator (used by vLLM sleep/wake) is incompatible with expandable_segments.
+            value: "expandable_segments:False"
+          - name: TOKENIZERS_PARALLELISM
+            value: "false"
+          - name: OMP_NUM_THREADS
+            value: "1"
+          - name: RAY_max_grpc_threads
+            value: "32"
+
+          # --- NCCL ---
+          - name: NCCL_DEBUG
+            value: "INFO"
+
+          # --- llm-d integration debug logging (default: quiet) ---
+          # Uncomment to enable verbose output from integration components.
+          # See README ## Debug logging for details.
+          # - name: VERL_VLLM_LOG_LEVEL
+          #   value: "DEBUG"
+          # - name: VERL_SIDECAR_LOG_LEVEL
+          #   value: "5"
+          # - name: VERL_EPP_VERBOSITY
+          #   value: "5"
+          # - name: VERL_ENVOY_LOG_LEVEL
+          #   value: "debug"
+
+          resources:
+            limits:
+              cpu: "64"
+              memory: "256G"
+              nvidia.com/gpu: "8"
+            requests:
+              cpu: "48"
+              memory: "192G"
+              nvidia.com/gpu: "8"
+          volumes:
+          - name: dshm
+            emptyDir:
+              medium: Memory
+              sizeLimit: "64Gi"
+          - name: verl-configs
+            configMap:
+              name: verl-config-epp

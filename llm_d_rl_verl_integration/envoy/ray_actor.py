@@ -20,7 +20,7 @@ from llm_d_rl_verl_integration.shared.endpoints import write_pd_endpoints, write
 logger = logging.getLogger(__name__)
 
 _ENVOY_BINARY = "/usr/local/bin/envoy"
-_ENVOY_LOG = "/tmp/envoy_ray.log"
+_ENVOY_LOG = "/tmp/envoy.log"
 _DEFAULT_ENVOY_PORT = 8081
 _BUNDLED_ENVOY_CONFIG = os.path.join(os.path.dirname(__file__), "envoy.yaml")
 
@@ -99,7 +99,7 @@ class LlmdStackActor:
         cmd = [
             _ENVOY_BINARY,
             "--service-node", "envoy-proxy",
-            "--log-level", "info",
+            "--log-level", os.environ.get("VERL_ENVOY_LOG_LEVEL", "info"),
             "--concurrency", "8",
             "--drain-strategy", "immediate",
             "--drain-time-s", "60",

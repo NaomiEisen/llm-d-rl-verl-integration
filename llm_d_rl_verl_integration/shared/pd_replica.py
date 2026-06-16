@@ -49,7 +49,9 @@ class PDPrefillVLLMHttpServer(vLLMHttpServer):
         os.environ["VLLM_NIXL_SIDE_CHANNEL_HOST"] = self._server_address
         os.environ["VLLM_NIXL_SIDE_CHANNEL_PORT"] = str(nixl_port)
         os.environ.setdefault("UCX_TLS", "cuda_ipc,cuda_copy,tcp")
-        os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+        vllm_log_level = os.environ.get("VERL_VLLM_LOG_LEVEL")
+        if vllm_log_level:
+            os.environ["VLLM_LOGGING_LEVEL"] = vllm_log_level
         await super().launch_server(
             master_address=master_address,
             master_port=master_port,
@@ -84,7 +86,9 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
         os.environ["VLLM_NIXL_SIDE_CHANNEL_HOST"] = self._server_address
         os.environ["VLLM_NIXL_SIDE_CHANNEL_PORT"] = str(nixl_port)
         os.environ.setdefault("UCX_TLS", "cuda_ipc,cuda_copy,tcp")
-        os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
+        vllm_log_level = os.environ.get("VERL_VLLM_LOG_LEVEL")
+        if vllm_log_level:
+            os.environ["VLLM_LOGGING_LEVEL"] = vllm_log_level
         node_ip = self._server_address
         self._server_address = _VLLM_LOCAL_BIND_HOST
         try:
@@ -100,6 +104,7 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
     def _launch_sidecar(self) -> None:
         custom = self.config.get("custom") or {}
         connector = custom.get("sidecar_connector", "nixlv2")
+        sidecar_log_level = os.environ.get("VERL_SIDECAR_LOG_LEVEL", "0")
         vllm_port = self._server_port
         self._sidecar_port = _find_free_port()
         cmd = [
@@ -108,7 +113,7 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
             f"--vllm-port={vllm_port}",
             f"--kv-connector={connector}",
             "--secure-proxy=false",
-            "--zap-log-level=5",
+            f"--zap-log-level={sidecar_log_level}",
         ]
         logger.info("Launching llm-d routing sidecar: %s", " ".join(cmd))
         self._sidecar_process = subprocess.Popen(cmd)
