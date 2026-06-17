@@ -2,11 +2,12 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: llmd-epp-configs
+  namespace: <your-namespace>
 data:
   epp-config.yaml: |
     # Approximate prefix-cache EPP config for verl.
     # Derived from guides/optimized-baseline/router/optimized-baseline.values.yaml, extended with
-    # file-discovery (verl file-based endpoint discovery) and vllmhttp-parser.
+    # file-discovery (verl file-based endpoint discovery) and vllmhttp-parser token_ids.
 
     apiVersion: llm-d.ai/v1alpha1
     kind: EndpointPickerConfig
