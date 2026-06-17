@@ -13,7 +13,7 @@ This repo introduces to approaches:
 
 During each training step verl drives generation through the following component hierarchy:
 
-![verl generate call flow](assets/verl-generate-call-flow.png)
+![verl generate call flow](images/verl-generate-call-flow.png)
 
 `LLMServerClient` is the object `AgentLoopWorker` calls for every generation request. verl's default implementation uses `GlobalRequestLoadBalancer` to select replicas by least in-flight requests, with sticky sessions for multi-turn continuity.
 
@@ -31,7 +31,7 @@ This integration replaces two components:
 The point of the integration is to utilize EPP as the routing stategy.
 Each generation request is sent to the **Endpoint Picker Plugin (EPP)** via gRPC ext_proc.  EPP scores all available vLLM replicas (prefix-cache hit rate, queue depth, KV utilisation) and injects the chosen backend address as a header.  The `EPPLLMClient` reads that header and forwards the request directly to the selected vLLM replica.
 
-![epp generate call flow](/assets/epp-generate-call-flow.png)
+![epp generate call flow](/images/epp-generate-call-flow.png)
 ### How the lifecycle works
 
 After all vLLM replicas are up:
