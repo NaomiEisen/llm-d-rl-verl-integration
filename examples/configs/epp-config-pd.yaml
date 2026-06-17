@@ -1,9 +1,4 @@
 # llm-d EPP config for P/D disaggregation with VERL.
-#
-# Based on config-epp-token-in.yaml, adapted for P/D:
-# - Adds disagg-profile-handler + prefill/decode filters to split requests
-# - Endpoints file is written by PDVLLMReplica at startup with
-#   llm-d.ai/role=prefill and llm-d.ai/role=decode labels.
 
 apiVersion: llm-d.ai/v1alpha1
 kind: EndpointPickerConfig
