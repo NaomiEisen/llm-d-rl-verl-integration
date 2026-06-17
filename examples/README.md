@@ -42,14 +42,124 @@ The `postStart` hook on each pod installs the integration package and pre-downlo
 
 ## Step 3 — Run training
 
-Exec into the head pod and run one of the training scripts:
+Exec into the head pod, then run one of the commands below.
 
 ```bash
 kubectl exec -it <head-pod-name> -- bash
+```
+
+All commands use verl's own `run_qwen3_4b_fsdp.sh` as the base script and pass the integration overrides via `$@`. `hydra.run.dir` is required because the default `./outputs/` path is read-only in the container.
+
+### EPP — direct gRPC routing
+
+```bash
+MODEL_PATH=/tmp/verl/models/Qwen3-4B \
+TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
+TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
+SAVE_FREQ=-1 \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
-    actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager \
+    trainer.logger='["console","file"]' \
+    trainer.default_local_dir=/tmp/checkpoints \
+    trainer.total_training_steps=50 \
+    '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs' \
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager \
     +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
-    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml
+    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
+    actor_rollout_ref.rollout.disable_log_stats=False \
+    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    'hydra.run.dir=/tmp/hydra-outputs'
+```
+
+### EPP — direct gRPC routing, PD disaggregated
+
+```bash
+INFER_BACKEND=vllm-llmd-pd \
+MODEL_PATH=/tmp/verl/models/Qwen3-4B \
+TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
+TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
+ROLLOUT_GPU_MEM_UTIL=0.2 \
+SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples_pd \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_8gpu \
+bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
+    actor_rollout_ref.rollout.enforce_eager=True \
+    actor_rollout_ref.rollout.disaggregation.prefill_replicas=2 \
+    actor_rollout_ref.rollout.disaggregation.decode_replicas=2 \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
+    trainer.logger='["console","file"]' \
+    trainer.default_local_dir=/tmp/checkpoints \
+    trainer.validation_data_dir=/tmp/verl/generations/val \
+    trainer.rollout_data_dir=/tmp/verl/generations/train \
+    trainer.total_training_steps=80 \
+    '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs' \
+    +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.register_pd \
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager \
+    +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config-pd.yaml \
+    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
+    +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
+    actor_rollout_ref.rollout.disable_log_stats=False \
+    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    'hydra.run.dir=/tmp/hydra-outputs'
+```
+
+### Envoy + EPP — HTTP proxy routing
+
+```bash
+MODEL_PATH=/tmp/verl/models/Qwen3-4B \
+TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
+TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
+SAVE_FREQ=-1 \
+bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
+    trainer.logger='["console","file"]' \
+    trainer.default_local_dir=/tmp/checkpoints \
+    trainer.total_training_steps=50 \
+    '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs' \
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager \
+    +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
+    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
+    actor_rollout_ref.rollout.disable_log_stats=False \
+    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    'hydra.run.dir=/tmp/hydra-outputs'
+```
+
+### Envoy + EPP — HTTP proxy routing, PD disaggregated
+
+```bash
+INFER_BACKEND=vllm-llmd-pd \
+MODEL_PATH=/tmp/verl/models/Qwen3-4B \
+TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
+TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
+ROLLOUT_GPU_MEM_UTIL=0.2 \
+SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples_pd \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_pd_fsdp_8gpu \
+bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
+    actor_rollout_ref.rollout.enforce_eager=True \
+    actor_rollout_ref.rollout.disaggregation.prefill_replicas=2 \
+    actor_rollout_ref.rollout.disaggregation.decode_replicas=2 \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
+    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
+    trainer.logger='["console","file"]' \
+    trainer.default_local_dir=/tmp/checkpoints \
+    trainer.validation_data_dir=/tmp/verl/generations/val \
+    trainer.rollout_data_dir=/tmp/verl/generations/train \
+    trainer.total_training_steps=80 \
+    '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs' \
+    +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.register_pd \
+    +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager \
+    +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config-pd.yaml \
+    +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
+    +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
+    actor_rollout_ref.rollout.disable_log_stats=False \
+    actor_rollout_ref.rollout.enable_prefix_caching=True \
+    '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
 ## Step 4 — Verify it's working
