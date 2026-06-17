@@ -53,9 +53,13 @@ sequenceDiagram
 
 After all vLLM replicas are up:
 
-1. `EPPAgentLoopManager` spawns `LlmdActor`, a Ray actor pinned to the head node, passing all replica addresses.
-2. The actor writes `/tmp/epp-endpoints.yaml` and starts the EPP subprocess, waiting until its gRPC health check passes.
-3. The returned EPP gRPC address is passed to `EPPLLMClient`, which is injected into every `AgentLoopWorker`.
+1. `EnvoyAgentLoopManager` creates `LlmdActor` — a Ray actor **pinned to the head node** that starts EPP and Envoy.
+2. The actor:
+   a. Writes the EPP endpoints YAML on the head node.
+   b. Starts the EPP subprocess.
+   c. Returns EPP gRPC address.
+3. `_create_llm_client` builds `EPPLLMClient` with that address.
+
 
 ### Config variables
 
@@ -106,8 +110,8 @@ After all vLLM replicas are up:
 1. `EnvoyAgentLoopManager` creates `LlmdActor` — a Ray actor **pinned to the head node** that starts EPP and Envoy.
 2. The actor:
    a. Writes the EPP endpoints YAML on the head node.
-   b. Starts the EPP subprocess and waits for its gRPC health check.
-   c. Starts the Envoy subprocess (`--disable-hot-restart`) and waits for TCP on port 8081.
+   b. Starts the EPP subprocess.
+   c. Starts the Envoy subprocess.
    d. Returns `<head-node-ip>:8081` as the Envoy address.
 3. `_create_llm_client` builds `EnvoyLLMClient` with that address.
 
@@ -167,14 +171,7 @@ Running the integration requires three things:
    ```bash
    pip install -e /path/to/llm-d-rl-verl-integration
    ```
-3. **Run verl's training entry-point** with the integration wired in via Hydra overrides — the two keys that activate the integration are `agent_loop_manager_class` and `epp_config_file`:
-   ```bash
-   python3 -m verl.trainer.main_ppo \
-       ... \
-       +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager \
-       +actor_rollout_ref.rollout.custom.epp_config_file=/path/to/epp-config.yaml \
-       +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml
-   ```
+3. **Run verl's training entry-point** with the integration wired in via Hydra overrides.
 
    No other verl source changes or pre-start steps are needed.  EPP (and Envoy, in the Envoy+EPP integration) are started automatically as Ray actors by the manager after all vLLM replicas are up.
 
