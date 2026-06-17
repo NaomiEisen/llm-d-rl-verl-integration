@@ -31,36 +31,21 @@ This integration replaces two components:
 The point of the integration is to utilize EPP as the routing stategy.
 Each generation request is sent to the **Endpoint Picker Plugin (EPP)** via gRPC ext_proc.  EPP scores all available vLLM replicas (prefix-cache hit rate, queue depth, KV utilisation) and injects the chosen backend address as a header.  The `EPPLLMClient` reads that header and forwards the request directly to the selected vLLM replica.
 
-### Components
-
-```mermaid
-sequenceDiagram
-    participant W as AgentLoopWorker
-    participant C as EPPLLMClient
-    participant E as EPP subprocess
-    participant V as vLLM Ray actor
-
-    W->>C: generate(prompt_ids, sampling_params)
-    C->>E: gRPC ProcessingRequest (ext_proc)
-    Note over E: prefix-cache-scorer<br/>kv-cache-scorer<br/>queue-scorer<br/>no-hit-lru-scorer
-    E-->>C: x-gateway-destination-endpoint: host:port
-    Note over C: address → actor handle map lookup
-    C->>V: actor.generate.remote(prompt_ids, sampling_params)
-    V-->>C: TokenOutput
-    C-->>W: TokenOutput
-```
+![epp generate call flow](/assets/epp-generate-call-flow.png)
 
 ### How the lifecycle works
 
 After all vLLM replicas are up:
 
-1. `EnvoyAgentLoopManager` creates `LlmdActor` — a Ray actor **pinned to the head node** that starts EPP and Envoy.
+1. `EnvoyAgentLoopManager` creates `LlmdActor` — a Ray actor **pinned to the head node** that starts EPP.
 2. The actor:
    a. Writes the EPP endpoints YAML on the head node.
    b. Starts the EPP subprocess.
    c. Returns EPP gRPC address.
 3. `_create_llm_client` builds `EPPLLMClient` with that address.
 
+**EPPLLMClient:**
+When `.generate()` is called on `EPPLLMClient`, it sends a gRPC ext_proc request to the EPP subprocess. After receiving the selected endpoint, it maps the address to the matching inference engine replica's Ray actor handle and calls `.generate()` on it directly — the same path as verl's built-in `LLMClient`, but with EPP-driven replica selection instead of least-in-flight load balancing.
 
 ### Config variables
 
@@ -82,30 +67,9 @@ After all vLLM replicas are up:
 ### Overview
 
 This integration uses llmd as the rollout backned, meaning, we are treating Envoy as the single rollout endpoint (Note: llm inference engine are still laumnched by verl).
-All generation requests are sent to a single **Envoy** proxy endpoint.  Envoy calls EPP via gRPC ext_proc to pick the best replica, then routes the request to it using an `ORIGINAL_DST` cluster driven by the `x-gateway-destination-endpoint` header EPP injects.  verl workers only ever speak HTTP to one address; all routing intelligence lives inside Envoy + EPP on the head node.
+All generation requests are sent to a single **Envoy** proxy endpoint. Envoy calls EPP via gRPC ext_proc to pick the best replica, then forwards the request to it. verl workers only ever speak HTTP to one address; all routing intelligence lives inside Envoy + EPP on the head node.
 
-### Components
-
-```mermaid
-sequenceDiagram
-    participant W as AgentLoopWorker
-    participant C as EnvoyLLMClient
-    participant Env as Envoy :8081
-    participant E as EPP subprocess :9002
-    participant V as vLLM replica
-
-    W->>C: generate(prompt_ids, sampling_params)
-    C->>Env: POST /inference/v1/generate
-    Env->>E: gRPC ext_proc ProcessingRequest
-    Note over E: prefix-cache-scorer<br/>kv-cache-scorer<br/>queue-scorer<br/>no-hit-lru-scorer
-    E-->>Env: x-gateway-destination-endpoint: host:port
-    Note over Env: ORIGINAL_DST cluster routes<br/>to address in header
-    Env->>V: POST /inference/v1/generate
-    V-->>Env: TokenOutput
-    Env-->>C: TokenOutput
-    C-->>W: TokenOutput
-```
-
+< put similar graph >
 ### How the lifecycle works
 
 After all vLLM replicas are up:
@@ -118,6 +82,8 @@ After all vLLM replicas are up:
    d. Returns `<head-node-ip>:8081` as the Envoy address.
 3. `_create_llm_client` builds `EnvoyLLMClient` with that address.
 
+**EnvoyLLMClient:**
+When `.generate()` is called on `EnvoyLLMClient`, it sends an HTTP request to the local Envoy proxy. Envoy calls EPP via gRPC ext_proc to select a replica, then forwards the request to it using an `ORIGINAL_DST` cluster driven by the address EPP injects into the response header.
 
 ### Config variables
 
@@ -167,31 +133,7 @@ The EPP config must use the PD-aware profile — `shared/epp-example-config-pd.y
 
 ## How to run
 
-Running the integration requires three things:
-
-1. **A running Ray cluster** — any Ray cluster works (local, KubeRay, SSH).  The integration assumes the EPP and Envoy binaries are present on the head node (they are bundled in the provided container image).
-2. **Install the integration package** on every node in the cluster:
-   ```bash
-   pip install -e /path/to/llm-d-rl-verl-integration
-   ```
-3. **Run verl's training entry-point** with the integration wired in via Hydra overrides.
-
-   No other verl source changes or pre-start steps are needed.  EPP (and Envoy, in the Envoy+EPP integration) are started automatically as Ray actors by the manager after all vLLM replicas are up.
-
-### KubeRay example
-
-`examples/ray-cluster.yaml` deploys a single-node 8-GPU cluster: a headless ray-head pod (no GPU, runs the driver and GCS) and a ray-worker pod with 8 GPUs.  The `postStart` hook pre-downloads GSM8K and Qwen3-4B so training can start immediately once the pods are ready.
-
-The training scripts in `examples/training-configs/` are derived from verl's `examples/grpo_trainer/run_qwen3_4b_fsdp.sh` — same GRPO/Qwen3-4B/FSDP defaults — with an `EXTRA` block that adds the integration Hydra overrides.  The only difference between the EPP-as-router and Envoy+EPP variants is the `agent_loop_manager_class`:
-
-| Script | Routing | PD disaggregation |
-|--------|---------|-------------------|
-| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp.sh` | EPP direct gRPC | no |
-| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-epp_pd.sh` | EPP direct gRPC | yes |
-| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-llmd_stack.sh` | llm-d stack (Envoy + EPP) | no |
-| `examples/training-configs/run_qwen3_4b_fsdp-8-gpus-llmd_stack_pd.sh` | llm-d stack (Envoy + EPP) | yes |
-
-For PD scripts, `rollout.name=vllm-llmd-pd` is set along with the disaggregation replica counts and NIXL KV transfer config — see [PD Disaggregation](#pd-disaggregation----vllm-llmd-pd) for the full config reference.
+See [examples/](examples/README.md) for a step-by-step KubeRay deployment walkthrough including manifests, EPP config setup, and training script examples.
 
 ---
 

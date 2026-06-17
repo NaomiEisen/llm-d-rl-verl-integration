@@ -34,6 +34,8 @@ spec:
                   exec > /tmp/setup_log.txt 2>&1
                   echo "Starting setup..."
 
+                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration
+
                   # Prepare data and prefetch the model.
                   mkdir -p /tmp/verl/hf_cache/datasets
 
@@ -52,10 +54,6 @@ spec:
           # --- Runtime paths ---
           - name: HOME
             value: "/tmp"
-          - name: PYTHONPATH
-            value: "/tmp/llm-d-rl-verl-integration"
-          - name: PYTHONUSERBASE
-            value: "/tmp/.local"
 
           # --- HuggingFace cache ---
           - name: HF_HOME
@@ -131,6 +129,9 @@ spec:
           - mountPath: /etc/verl-configs
             name: verl-configs
             readOnly: true
+          - mountPath: /etc/llmd-configs
+            name: llmd-epp-configs
+            readOnly: true
         volumes:
         - name: dshm
           emptyDir:
@@ -139,6 +140,9 @@ spec:
         - name: verl-configs
           configMap:
             name: verl-config-epp
+        - name: llmd-epp-configs
+          configMap:
+            name: llmd-epp-configs
 
   workerGroupSpecs:
   # GPU workers: resource requests must match verl-training-config.yaml pool sizes.
@@ -176,6 +180,7 @@ spec:
                 - -c
                 - |
                   exec > /tmp/setup_log.txt 2>&1
+                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration
                   mkdir -p /tmp/verl/hf_cache/datasets
                   python3 /opt/verl/examples/data_preprocess/gsm8k.py --local_save_dir /tmp/verl/data/gsm8k
                   # Full model weights for FSDP training + vLLM rollout
@@ -189,10 +194,6 @@ spec:
           # --- Runtime paths ---
           - name: HOME
             value: "/tmp"
-          - name: PYTHONPATH
-            value: "/tmp/llm-d-rl-verl-integration"
-          - name: PYTHONUSERBASE
-            value: "/tmp/.local"
 
           # --- HuggingFace cache ---
           - name: HF_HOME
@@ -254,11 +255,17 @@ spec:
               cpu: "48"
               memory: "192G"
               nvidia.com/gpu: "8"
-          volumes:
-          - name: dshm
-            emptyDir:
-              medium: Memory
-              sizeLimit: "64Gi"
-          - name: verl-configs
-            configMap:
-              name: verl-config-epp
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /etc/llmd-configs
+            name: llmd-epp-configs
+            readOnly: true
+        volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "64Gi"
+        - name: llmd-epp-configs
+          configMap:
+            name: llmd-epp-configs

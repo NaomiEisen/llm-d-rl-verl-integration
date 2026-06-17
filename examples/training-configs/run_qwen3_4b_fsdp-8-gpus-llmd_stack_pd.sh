@@ -31,7 +31,7 @@ DECODE_REPLICAS=${DECODE_REPLICAS:-2}
 ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.2}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
-EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/config/epp-example-config-pd.yaml}
+EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/etc/llmd-configs/epp-config-pd.yaml}
 EPP_ENDPOINTS_FILE=${EPP_ENDPOINTS_FILE:-/tmp/epp-endpoints.yaml}
 
 PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples_pd}
