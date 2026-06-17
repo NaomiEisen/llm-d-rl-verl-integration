@@ -46,7 +46,8 @@ sequenceDiagram
     E-->>C: x-gateway-destination-endpoint: host:port
     Note over C: address → actor handle map lookup
     C->>V: actor.generate.remote(prompt_ids, sampling_params)
-    V-->>W: TokenOutput
+    V-->>C: TokenOutput
+    C-->>W: TokenOutput
 ```
 
 ### How the lifecycle works
@@ -100,7 +101,9 @@ sequenceDiagram
     E-->>Env: x-gateway-destination-endpoint: host:port
     Note over Env: ORIGINAL_DST cluster routes<br/>to address in header
     Env->>V: POST /inference/v1/generate
-    V-->>W: TokenOutput
+    V-->>Env: TokenOutput
+    Env-->>C: TokenOutput
+    C-->>W: TokenOutput
 ```
 
 ### How the lifecycle works
@@ -199,8 +202,8 @@ All integration components default to quiet logging.  Set these env vars to incr
 | Env var | Component | Default | Debug value |
 |---------|-----------|---------|-------------|
 | `VERL_VLLM_LOG_LEVEL` | vLLM inside prefill and decode replicas (`VLLM_LOGGING_LEVEL`) | unset (vLLM default) | `DEBUG` |
-| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `5` |
-| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `5` |
+| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `1-5` |
+| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `1-5` |
 | `VERL_ENVOY_LOG_LEVEL` | Envoy proxy (`--log-level`) | `info` | `debug` |
 
 Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.  Use one of the two methods below.
