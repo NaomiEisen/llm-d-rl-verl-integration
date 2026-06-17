@@ -143,7 +143,7 @@ All integration components default to quiet logging.  Set these env vars to incr
 | Env var | Component | Default | Debug value |
 |---------|-----------|---------|-------------|
 | `VERL_VLLM_LOG_LEVEL` | vLLM inside prefill and decode replicas (`VLLM_LOGGING_LEVEL`) | unset (vLLM default) | `DEBUG` |
-| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `1-5` |
+| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `5` |
 | `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `5` |
 | `VERL_ENVOY_LOG_LEVEL` | Envoy proxy (`--log-level`) | `info` | `debug` |
 
