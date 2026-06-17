@@ -11,12 +11,21 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+import socket
+
 import ray
 
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import TokenOutput
 
 logger = logging.getLogger(__name__)
+
+_HEART_LOG = f"/tmp/heart_debug_{socket.gethostname()}.log"
+
+
+def _hlog(msg: str) -> None:
+    with open(_HEART_LOG, "a") as _f:
+        _f.write(msg + "\n")
 
 
 class EPPLLMClient(LLMServerClient):
@@ -71,13 +80,12 @@ class EPPLLMClient(LLMServerClient):
     ) -> TokenOutput:
         endpoint, sidecar_headers = await self._epp_client.pick(self._model_name, prompt_ids)
 
-        print(
+        _hlog(
             f"❤️ [EPPLLMClient] request_id={request_id} "
             f"pd_mode={self._pd_mode} "
             f"endpoint={endpoint!r} "
             f"sidecar_headers={sidecar_headers!r} "
-            f"known_endpoints={list(self._address_to_handle.keys())}",
-            flush=True,
+            f"known_endpoints={list(self._address_to_handle.keys())}"
         )
 
         if endpoint is None:
@@ -94,11 +102,10 @@ class EPPLLMClient(LLMServerClient):
         if self._pd_mode and sidecar_headers:
             extra_kwargs["sidecar_headers"] = sidecar_headers
 
-        print(
+        _hlog(
             f"❤️ [EPPLLMClient] calling actor.generate pd_mode={self._pd_mode} "
             f"passing_sidecar_headers={'sidecar_headers' in extra_kwargs} "
-            f"x-prefiller-host-port={sidecar_headers.get('x-prefiller-host-port')!r}",
-            flush=True,
+            f"x-prefiller-host-port={sidecar_headers.get('x-prefiller-host-port')!r}"
         )
 
         return await actor.generate.remote(

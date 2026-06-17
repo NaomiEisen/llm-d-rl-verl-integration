@@ -32,8 +32,17 @@ from __future__ import annotations
 
 import logging
 
+import socket
+
 import ray
 from omegaconf import OmegaConf
+
+_HEART_LOG = f"/tmp/heart_debug_{socket.gethostname()}.log"
+
+
+def _hlog(msg: str) -> None:
+    with open(_HEART_LOG, "a") as _f:
+        _f.write(msg + "\n")
 
 from llm_d_rl_verl_integration.base_agent_loop_manager import LlmdAgentLoopManager
 from llm_d_rl_verl_integration.llmd_actor import LlmdActor
@@ -92,11 +101,10 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
                     "Make sure the rollout backend is vllm and servers are started."
                 )
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
-        print(
+        _hlog(
             f"❤️ [EPPAgentLoopManager] pd_mode={self._pd_mode} server_roles={server_roles} "
             f"address_to_handle={list(self._address_to_handle.keys())} "
-            f"actor_names=[{', '.join(f'vllm_server_{i}_0' for i in range(len(server_addresses)))}]",
-            flush=True,
+            f"actor_names=[{', '.join(f'vllm_server_{i}_0' for i in range(len(server_addresses)))}]"
         )
 
         # Launch EPP via a Ray actor pinned to the head node.

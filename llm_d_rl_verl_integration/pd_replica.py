@@ -9,8 +9,17 @@ import socket
 import subprocess
 from typing import Any, Optional
 
+import socket
+
 import aiohttp
 import ray
+
+_HEART_LOG = f"/tmp/heart_debug_{socket.gethostname()}.log"
+
+
+def _hlog(msg: str) -> None:
+    with open(_HEART_LOG, "a") as _f:
+        _f.write(msg + "\n")
 
 from verl.workers.rollout.replica import TokenOutput
 from verl.workers.rollout.vllm_rollout.vllm_async_server import vLLMHttpServer, vLLMReplica
@@ -171,14 +180,13 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
         }
         headers = {k: v for k, v in epp.items() if not k.startswith(":") and k.lower() != "content-length"}
 
-        print(
+        _hlog(
             f"❤️ [PDDecodeVLLMHttpServer] request_id={request_id} "
             f"sidecar_port={self._sidecar_port} url={url} "
             f"sidecar_headers_keys={list(epp.keys())} "
             f"x-prefiller-host-port={epp.get('x-prefiller-host-port')!r} "
             f"forwarded_headers={list(headers.keys())} "
-            f"body_keys={list(body.keys())}",
-            flush=True,
+            f"body_keys={list(body.keys())}"
         )
 
         import asyncio as _asyncio
@@ -186,10 +194,9 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
         session = await self._get_sidecar_session()
         try:
             async with session.request(method, url, json=body, headers=headers) as resp:
-                print(
+                _hlog(
                     f"❤️ [PDDecodeVLLMHttpServer] sidecar responded request_id={request_id} "
-                    f"status={resp.status}",
-                    flush=True,
+                    f"status={resp.status}"
                 )
                 if not resp.ok:
                     error_body = await resp.text()
