@@ -1,6 +1,6 @@
 """AgentLoopManager that starts EPP + Envoy as a Ray actor and routes via Envoy.
 
-The LlmdStackActor is pinned to the head node (where GCS runs) so the
+LlmdActor is pinned to the head node (where GCS runs) so the
 endpoints file is written on the same node that EPP reads from.
 
 YAML config (no verl code changes needed):
@@ -23,8 +23,8 @@ import ray
 from omegaconf import OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
+from llm_d_rl_verl_integration.shared.llmd_actor import LlmdActor
 from llm_d_rl_verl_integration.llmd_stack.llm_client import EnvoyLLMClient
-from llm_d_rl_verl_integration.llmd_stack.llmd_stack_actor import LlmdStackActor
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
 from llm_d_rl_verl_integration.shared.pd_replica import PDEngineReplicaFactory
@@ -48,7 +48,7 @@ class EnvoyAgentLoopManager(LlmdAgentLoopManager):
     def _on_servers_ready(self, server_addresses: list[str]) -> None:
         rollout_cfg = self.rollout_config
 
-        self._stack_actor = LlmdStackActor.options(
+        self._stack_actor = LlmdActor.options(
             scheduling_strategy=self.head_node_strategy()
         ).remote()
 
@@ -58,9 +58,10 @@ class EnvoyAgentLoopManager(LlmdAgentLoopManager):
         self._envoy_address = ray.get(
             self._stack_actor.start.remote(
                 server_addresses=server_addresses,
-                model_config=self.model_config,
+                model_config=OmegaConf.to_container(self.model_config, resolve=True),
                 rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
                 server_roles=server_roles,
+                with_envoy=True,
             )
         )
         logger.info("[EnvoyAgentLoopManager] Envoy ready at %s", self._envoy_address)

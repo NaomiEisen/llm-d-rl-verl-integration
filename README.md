@@ -13,8 +13,7 @@ This repo introduces to approaches:
 
 During each training step verl drives generation through the following component hierarchy:
 
-< put a diagram >
-
+![verl generate call flow](assets/verl-generate-call-flow.png)
 
 `LLMServerClient` is the object `AgentLoopWorker` calls for every generation request. verl's default implementation uses `GlobalRequestLoadBalancer` to select replicas by least in-flight requests, with sticky sessions for multi-turn continuity.
 
@@ -54,7 +53,7 @@ sequenceDiagram
 
 After all vLLM replicas are up:
 
-1. `EPPAgentLoopManager` spawns `EPPActor`, a Ray actor pinned to the head node, passing all replica addresses.
+1. `EPPAgentLoopManager` spawns `LlmdActor`, a Ray actor pinned to the head node, passing all replica addresses.
 2. The actor writes `/tmp/epp-endpoints.yaml` and starts the EPP subprocess, waiting until its gRPC health check passes.
 3. The returned EPP gRPC address is passed to `EPPLLMClient`, which is injected into every `AgentLoopWorker`.
 
@@ -104,7 +103,7 @@ sequenceDiagram
 
 After all vLLM replicas are up:
 
-1. `EnvoyAgentLoopManager` creates `LlmdStackActor` — a Ray actor **pinned to the head node** that wraps the EPP and Envoy.
+1. `EnvoyAgentLoopManager` creates `LlmdActor` — a Ray actor **pinned to the head node** that starts EPP and Envoy.
 2. The actor:
    a. Writes the EPP endpoints YAML on the head node.
    b. Starts the EPP subprocess and waits for its gRPC health check.

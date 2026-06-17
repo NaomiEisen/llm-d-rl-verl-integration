@@ -36,7 +36,7 @@ import ray
 from omegaconf import DictConfig, OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.epp_router.epp_actor import EPPActor
+from llm_d_rl_verl_integration.shared.llmd_actor import LlmdActor
 from llm_d_rl_verl_integration.epp_router.llm_client import EPPLLMClient
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
@@ -66,8 +66,6 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
 
     def _on_servers_ready(self, server_addresses: list[str]) -> None:
         rollout_cfg = self.rollout_config
-        custom = OmegaConf.to_container(rollout_cfg.get("custom") or {}, resolve=True)
-        endpoints_file = custom.get("epp_endpoints_file")
 
         # Detect PD mode by backend name (not disaggregation.enabled, which we
         # intentionally leave False to avoid verl's sglang-only guard).
@@ -96,17 +94,17 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
 
         # Launch EPP via a Ray actor pinned to the head node.
-        epp_actor = EPPActor.options(
+        epp_actor = LlmdActor.options(
             scheduling_strategy=self.head_node_strategy()
         ).remote()
 
         self._grpc_addr = ray.get(
             epp_actor.start.remote(
-                rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
                 server_addresses=server_addresses,
                 model_config=OmegaConf.to_container(self.model_config, resolve=True),
-                epp_endpoints_file=endpoints_file,
+                rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
                 server_roles=server_roles,
+                with_envoy=False,
             )
         )
         self._epp_actor = epp_actor
