@@ -12,7 +12,6 @@ from typing import Any, Optional
 import aiohttp
 import ray
 
-from verl.utils.net_utils import is_valid_ipv6_address
 from verl.workers.rollout.replica import TokenOutput
 from verl.workers.rollout.vllm_rollout.vllm_async_server import vLLMHttpServer, vLLMReplica
 from verl.workers.rollout.vllm_rollout.vllm_rollout import ServerAdapter
@@ -30,10 +29,6 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
-
-
-def _fmt_addr(addr: str, port: int | str) -> str:
-    return f"[{addr}]:{port}" if is_valid_ipv6_address(addr) else f"{addr}:{port}"
 
 
 class PDPoolCoordinator:
