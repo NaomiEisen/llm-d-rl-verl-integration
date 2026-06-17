@@ -36,7 +36,7 @@ import ray
 from omegaconf import OmegaConf
 
 from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.epp_router.ray_actor import EPPRayActorWrapper
+from llm_d_rl_verl_integration.llmd_actor import LlmdActor
 from llm_d_rl_verl_integration.epp_router.llm_client import EPPLLMClient
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
@@ -94,7 +94,7 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
 
         # Launch EPP via a Ray actor pinned to the head node.
-        epp_actor = EPPRayActorWrapper.options(
+        epp_actor = LlmdActor.options(
             scheduling_strategy=self.head_node_strategy()
         ).remote()
 
@@ -103,14 +103,13 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
                 rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
                 server_addresses=server_addresses,
                 model_config=OmegaConf.to_container(self.model_config, resolve=True),
-                epp_endpoints_file=endpoints_file,
                 server_roles=server_roles,
             )
         )
         self._epp_actor = epp_actor
         logger.info("[EPPAgentLoopManager] EPP ready at %s", self._grpc_addr)
 
-    def _create_llm_client(self, server_addresses: list[str]) -> LLMServerClient:
+    def _create_llm_client(self) -> LLMServerClient:
         return EPPLLMClient(
             config=self.config,
             load_balancer_handle=self.llm_client._load_balancer,

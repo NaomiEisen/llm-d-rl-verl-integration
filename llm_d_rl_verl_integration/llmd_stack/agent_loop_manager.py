@@ -1,7 +1,6 @@
 """AgentLoopManager that starts EPP + Envoy as a Ray actor and routes via Envoy.
 
-LlmdActor is pinned to the head node (where GCS runs) so the
-endpoints file is written on the same node that EPP reads from.
+LlmdActor is pinned to the head node (where GCS runs).
 
 YAML config (no verl code changes needed):
     actor_rollout_ref:
@@ -66,7 +65,7 @@ class EnvoyAgentLoopManager(LlmdAgentLoopManager):
         )
         logger.info("[EnvoyAgentLoopManager] Envoy ready at %s", self._envoy_address)
 
-    def _create_llm_client(self, server_addresses: list[str]) -> LLMServerClient:
+    def _create_llm_client(self) -> LLMServerClient:
         return EnvoyLLMClient(
             config=self.config,
             load_balancer_handle=self.llm_client._load_balancer,

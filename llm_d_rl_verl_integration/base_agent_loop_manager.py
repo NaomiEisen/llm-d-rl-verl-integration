@@ -54,7 +54,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
 
         self._on_servers_ready(server_addresses)
 
-        new_client = self._create_llm_client(server_addresses)
+        new_client = self._create_llm_client()
         if new_client is not None:
             self.llm_client = new_client
 
@@ -69,7 +69,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
         Default implementation does nothing.
         """
 
-    def _create_llm_client(self, server_addresses: list[str]) -> LLMServerClient | None:
+    def _create_llm_client(self) -> LLMServerClient | None:
         """Create and return the replacement LLMServerClient.
 
         Return ``None`` to keep the original verl client unchanged.

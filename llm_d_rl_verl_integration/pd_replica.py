@@ -110,8 +110,12 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
             "--secure-proxy=false",
             f"--zap-log-level={sidecar_log_level}",
         ]
-        logger.info("Launching llm-d routing sidecar: %s", " ".join(cmd))
-        self._sidecar_process = subprocess.Popen(cmd)
+        log_path = f"/tmp/sidecar-decode-{self.replica_rank}.log"
+        logger.info("Launching llm-d routing sidecar: %s (log: %s)", " ".join(cmd), log_path)
+        self._sidecar_log = open(log_path, "w")
+        self._sidecar_process = subprocess.Popen(
+            cmd, stdout=self._sidecar_log, stderr=subprocess.STDOUT
+        )
 
     def get_server_address(self):
         assert self._server_port is not None, "server not launched"
