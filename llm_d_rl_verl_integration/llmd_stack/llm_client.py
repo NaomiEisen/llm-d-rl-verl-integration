@@ -47,6 +47,14 @@ class EnvoyLLMClient(LLMServerClient):
         self._max_tokens = int(
             config.actor_rollout_ref.rollout.response_length
         )
+        self._session: aiohttp.ClientSession | None = None
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=36000),
+            )
+        return self._session
 
     async def generate(
         self,
@@ -63,13 +71,13 @@ class EnvoyLLMClient(LLMServerClient):
             "token_ids": prompt_ids,
             "sampling_params": {**sampling_params, "max_tokens": self._max_tokens},
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(self._url, json=body) as resp:
-                if not resp.ok:
-                    raise RuntimeError(
-                        f"Envoy returned HTTP {resp.status} for {self._url}"
-                    )
-                data = await resp.json()
+        session = await self._get_session()
+        async with session.post(self._url, json=body) as resp:
+            if not resp.ok:
+                raise RuntimeError(
+                    f"Envoy returned HTTP {resp.status} for {self._url}"
+                )
+            data = await resp.json()
 
         return _parse_response(data)
 

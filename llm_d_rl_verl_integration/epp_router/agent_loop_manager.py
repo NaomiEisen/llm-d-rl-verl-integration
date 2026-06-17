@@ -33,14 +33,14 @@ from __future__ import annotations
 import logging
 
 import ray
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 
-from llm_d_rl_verl_integration.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.llmd_actor import LlmdActor
+from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
+from llm_d_rl_verl_integration.epp_router.ray_actor import EPPRayActorWrapper
 from llm_d_rl_verl_integration.epp_router.llm_client import EPPLLMClient
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
-from llm_d_rl_verl_integration.pd_replica import PDEngineReplicaFactory
+from llm_d_rl_verl_integration.shared.pd_replica import PDEngineReplicaFactory
 
 
 def _load_llmd_pd():
@@ -48,8 +48,6 @@ def _load_llmd_pd():
 
 
 # Register vllm-llmd-pd at import time — this module is imported before
-# LLMServerManager.create() calls get_rollout_replica_class(), so the
-# registration is always in place when needed.
 RolloutReplicaRegistry.register("vllm-llmd-pd", _load_llmd_pd)
 
 logger = logging.getLogger(__name__)
@@ -66,6 +64,8 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
 
     def _on_servers_ready(self, server_addresses: list[str]) -> None:
         rollout_cfg = self.rollout_config
+        custom = OmegaConf.to_container(rollout_cfg.get("custom") or {}, resolve=True)
+        endpoints_file = custom.get("epp_endpoints_file")
 
         # Detect PD mode by backend name (not disaggregation.enabled, which we
         # intentionally leave False to avoid verl's sglang-only guard).
@@ -94,17 +94,17 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
 
         # Launch EPP via a Ray actor pinned to the head node.
-        epp_actor = LlmdActor.options(
+        epp_actor = EPPRayActorWrapper.options(
             scheduling_strategy=self.head_node_strategy()
         ).remote()
 
         self._grpc_addr = ray.get(
             epp_actor.start.remote(
+                rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
                 server_addresses=server_addresses,
                 model_config=OmegaConf.to_container(self.model_config, resolve=True),
-                rollout_config=OmegaConf.to_container(rollout_cfg, resolve=True),
+                epp_endpoints_file=endpoints_file,
                 server_roles=server_roles,
-                with_envoy=False,
             )
         )
         self._epp_actor = epp_actor

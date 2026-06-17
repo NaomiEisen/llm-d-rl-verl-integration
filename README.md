@@ -72,7 +72,7 @@ After all vLLM replicas are up:
 
 ---
 
-## Integration 2 — Envoy + EPP (HTTP proxy)
+## Integration 2 — LLmd Stack (Envoy + EPP - HTTP proxy)
 
 ### Overview
 
@@ -132,54 +132,16 @@ For PD disaggregated mode see [PD Disaggregation](#pd-disaggregation----vllm-llm
 
 ## PD Disaggregation — `vllm-llmd-pd`
 
-Both integrations support PD (prefill-decode) disaggregation via `rollout.name=vllm-llmd-pd`. This section describes the implementation behind that rollout backend.
+Both integrations support PD (prefill-decode) disaggregation via `rollout.name=vllm-llmd-pd`.
 
-### PDPrefillVLLMHttpServer and PDDecodeVLLMHttpServer
+Replicas are split into prefill and decode roles by `PDEngineReplicaFactory` (registered as the `vllm-llmd-pd` backend in verl's `RolloutReplicaRegistry`). The first `prefill_replicas` ranks become prefill; the remaining become decode. `world_size / tp_size` must equal `prefill_replicas + decode_replicas`.
 
-Both classes live in `llm_d_rl_verl_integration.pd_replica` and extend verl's `vLLMHttpServer`.  The base class launches a vLLM HTTP server process and exposes `generate()` / `get_server_address()`.  Each subclass overrides specific methods to wire in NIXL and the llm-d sidecar.
+- **Prefill replicas** (`PDPrefillVLLMHttpServer`) — launch vLLM with NIXL side-channel env vars so the decode sidecar can pull KV blocks from them. They never serve generate requests directly.
+- **Decode replicas** (`PDDecodeVLLMHttpServer`) — launch vLLM with NIXL env vars, then spawn `llm-d-routing-sidecar` alongside it. The sidecar is the public endpoint: it receives the request, fetches the prompt KV cache from the prefill replica via NIXL, then decodes locally. `get_server_address()` returns the sidecar port, so EPP routes to the sidecar, not to vLLM directly.
 
-**`PDPrefillVLLMHttpServer`**
-
-Added on top of `vLLMHttpServer`:
-
-- **`launch_server()`** — sets `VLLM_NIXL_SIDE_CHANNEL_HOST` and `VLLM_NIXL_SIDE_CHANNEL_PORT` env vars (and `UCX_TLS=cuda_ipc,cuda_copy,tcp`) before calling `super().launch_server()`.  This tells vLLM to advertise its NIXL side-channel so the decode replica can pull KV blocks from it.
-- **`generate()`** — **unconditionally raises `RuntimeError`**.  The prefill server is never called directly by verl workers or EPP.  Its only job is to compute the prompt KV cache; the decode sidecar reaches it over HTTP using the address EPP injects as a routing header.
-
-The corresponding replica class `PDPrefillEngineReplica` sets `self._engine_role = "prefill"`, which is used when writing the EPP endpoints YAML: `write_pd_endpoints()` sets `llm-d.ai/role: prefill` on every prefill address.  EPP's `prefill-filter` plugin selects only endpoints with this label.
-
-**`PDDecodeVLLMHttpServer`**
-
-Added on top of `vLLMHttpServer`:
-
-- **`launch_server()`** — sets the same NIXL env vars as the prefill server, then overrides `self._server_address` to `127.0.0.1` before calling `super().launch_server()`, binding vLLM to loopback only (keeping it off the network). After the parent returns, restores the real node IP and calls `_launch_sidecar()`.
-- **`_launch_sidecar()`** — spawns `llm-d-routing-sidecar` as a subprocess (`--port`, `--vllm-port`, `--kv-connector`, `--secure-proxy=false`).  The sidecar listens on a free port and proxies requests to vLLM on localhost, adding the two-phase prefill→NIXL→decode coordination.
-- **`get_server_address()`** — returns `(node_ip, sidecar_port)` instead of the vLLM port.  This is the address written to the EPP endpoints YAML, so all traffic from EPP flows to the sidecar, not directly to vLLM.
-- **`generate()`** — used by the **EPP-as-router integration** (`EPPLLMClient`), which calls `generate()` directly on the replica after EPP selects it.  Forwards the request to `http://localhost:<sidecar_port>/inference/v1/generate`, passing the EPP-injected headers (prefill target host/port, remote block IDs, NIXL params) as HTTP headers so the sidecar can orchestrate the remote prefill and KV transfer before decoding locally.  In the Envoy+EPP integration, verl workers never call `generate()` on the replica at all — requests go to Envoy, which routes to the sidecar directly.
-
-The corresponding replica class `PDDecodeEngineReplica` sets `self._engine_role = "decode"`, so `write_pd_endpoints()` sets `llm-d.ai/role: decode` on every decode (sidecar) address.  EPP's `decode-filter` plugin selects only endpoints with this label, ensuring decode requests always land on a sidecar — never on a prefill replica.
-
-### PDEngineReplicaFactory
-
-`PDEngineReplicaFactory` (in `llm_d_rl_verl_integration.pd_replica`) is **a factory function, not a class**.  It is registered as the `vllm-llmd-pd` backend in verl's `RolloutReplicaRegistry` at import time by each integration's `agent_loop_manager.py`:
-
-```python
-RolloutReplicaRegistry.register("vllm-llmd-pd", lambda: PDEngineReplicaFactory)
-```
-
-When verl calls the factory for `replica_rank`, it reads `config.disaggregation.prefill_replicas` and `decode_replicas` via `PDPoolCoordinator` and returns the correct replica type:
-
-```
-rank 0 … prefill_replicas - 1   →  PDPrefillEngineReplica  (uses PDPrefillVLLMHttpServer)
-rank prefill_replicas … N - 1   →  PDDecodeEngineReplica   (uses PDDecodeVLLMHttpServer)
-```
-
-`PDPrefillEngineReplica` and `PDDecodeEngineReplica` are thin `vLLMReplica` subclasses that just swap in the matching server class above.
-
-`world_size / tp_size` must equal `prefill_replicas + decode_replicas`.
+Role labels (`llm-d.ai/role: prefill` / `decode`) are written to the EPP endpoints YAML so EPP's `prefill-filter` and `decode-filter` plugins route correctly.
 
 ### Config
-
-These keys are required on top of the base integration config when running in PD mode (applies to both EPP-as-router and Envoy+EPP):
 
 | Key | Required | Description |
 |-----|----------|-------------|
@@ -191,20 +153,6 @@ These keys are required on top of the base integration config when running in PD
 | `rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager` | yes | `true` |
 | `rollout.custom.sidecar_connector` | no | KV connector type passed to `llm-d-routing-sidecar` (default: `nixlv2`) |
 | `model.external_lib` | yes | `llm_d_rl_verl_integration.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
-
-`prefill_replicas + decode_replicas` must equal `world_size / tp_size` (total GPU count divided by tensor-parallel size).
-
-### NIXL KV transfer config
-
-NIXL is configured at the vLLM engine level via Hydra params (required for all PD scripts):
-
-```
-+actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector
-+actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both
-+actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true
-```
-
-The sidecar KV connector type is configured via `rollout.custom.sidecar_connector` (default: `nixlv2`).
 
 The EPP config must use the PD-aware profile — `shared/epp-example-config-pd.yaml` — which includes `disagg-profile-handler`, `prefill-filter`, `decode-filter`, and `prefix-based-pd-decider`.  Using the non-PD config causes all requests to be load-balanced across both prefill and decode replicas without role-based routing, and NIXL KV transfer will not happen.
 
@@ -260,14 +208,7 @@ All integration components default to quiet logging.  Set these env vars to incr
 
 Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.  Use one of the two methods below.
 
-**Hydra params** — pass via `ray_kwargs.ray_init.runtime_env.env_vars`, which verl forwards to every Ray worker at cluster init:
-
-```bash
-'+ray_kwargs.ray_init.runtime_env.env_vars.VERL_SIDECAR_LOG_LEVEL=5' \
-'+ray_kwargs.ray_init.runtime_env.env_vars.VERL_EPP_VERBOSITY=5'
-```
-
-**KubeRay** — set in the container spec; vars are present before Ray starts:
+With *KubeRay* — set in the container spec; vars are present before Ray starts:
 
 ```yaml
 containers:
