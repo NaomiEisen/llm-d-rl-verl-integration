@@ -71,6 +71,15 @@ class EPPLLMClient(LLMServerClient):
     ) -> TokenOutput:
         endpoint, sidecar_headers = await self._epp_client.pick(self._model_name, prompt_ids)
 
+        print(
+            f"❤️ [EPPLLMClient] request_id={request_id} "
+            f"pd_mode={self._pd_mode} "
+            f"endpoint={endpoint!r} "
+            f"sidecar_headers={sidecar_headers!r} "
+            f"known_endpoints={list(self._address_to_handle.keys())}",
+            flush=True,
+        )
+
         if endpoint is None:
             raise RuntimeError(f"EPP returned no endpoint for request {request_id}")
 
@@ -84,6 +93,13 @@ class EPPLLMClient(LLMServerClient):
         extra_kwargs: dict[str, Any] = {}
         if self._pd_mode and sidecar_headers:
             extra_kwargs["sidecar_headers"] = sidecar_headers
+
+        print(
+            f"❤️ [EPPLLMClient] calling actor.generate pd_mode={self._pd_mode} "
+            f"passing_sidecar_headers={'sidecar_headers' in extra_kwargs} "
+            f"x-prefiller-host-port={sidecar_headers.get('x-prefiller-host-port')!r}",
+            flush=True,
+        )
 
         return await actor.generate.remote(
             prompt_ids=prompt_ids,

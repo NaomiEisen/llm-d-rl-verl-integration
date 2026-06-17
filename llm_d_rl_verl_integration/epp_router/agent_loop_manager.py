@@ -92,6 +92,12 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
                     "Make sure the rollout backend is vllm and servers are started."
                 )
         logger.info("[EPPAgentLoopManager] address→handle map: %s", list(self._address_to_handle.keys()))
+        print(
+            f"❤️ [EPPAgentLoopManager] pd_mode={self._pd_mode} server_roles={server_roles} "
+            f"address_to_handle={list(self._address_to_handle.keys())} "
+            f"actor_names=[{', '.join(f'vllm_server_{i}_0' for i in range(len(server_addresses)))}]",
+            flush=True,
+        )
 
         # Launch EPP via a Ray actor pinned to the head node.
         epp_actor = LlmdActor.options(

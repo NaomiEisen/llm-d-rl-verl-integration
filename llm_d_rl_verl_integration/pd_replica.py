@@ -44,9 +44,7 @@ class PDPrefillVLLMHttpServer(vLLMHttpServer):
         os.environ["VLLM_NIXL_SIDE_CHANNEL_HOST"] = self._server_address
         os.environ["VLLM_NIXL_SIDE_CHANNEL_PORT"] = str(nixl_port)
         os.environ.setdefault("UCX_TLS", "cuda_ipc,cuda_copy,tcp")
-        vllm_log_level = os.environ.get("VERL_VLLM_LOG_LEVEL")
-        if vllm_log_level:
-            os.environ["VLLM_LOGGING_LEVEL"] = vllm_log_level
+        os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
         await super().launch_server(
             master_address=master_address,
             master_port=master_port,
@@ -81,9 +79,7 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
         os.environ["VLLM_NIXL_SIDE_CHANNEL_HOST"] = self._server_address
         os.environ["VLLM_NIXL_SIDE_CHANNEL_PORT"] = str(nixl_port)
         os.environ.setdefault("UCX_TLS", "cuda_ipc,cuda_copy,tcp")
-        vllm_log_level = os.environ.get("VERL_VLLM_LOG_LEVEL")
-        if vllm_log_level:
-            os.environ["VLLM_LOGGING_LEVEL"] = vllm_log_level
+        os.environ["VLLM_LOGGING_LEVEL"] = "DEBUG"
         node_ip = self._server_address
         self._server_address = _VLLM_LOCAL_BIND_HOST
         try:
@@ -99,7 +95,6 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
     def _launch_sidecar(self) -> None:
         custom = self.config.get("custom") or {}
         connector = custom.get("sidecar_connector", "nixlv2")
-        sidecar_log_level = os.environ.get("VERL_SIDECAR_LOG_LEVEL", "0")
         vllm_port = self._server_port
         self._sidecar_port = _find_free_port()
         cmd = [
@@ -108,7 +103,7 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
             f"--vllm-port={vllm_port}",
             f"--kv-connector={connector}",
             "--secure-proxy=false",
-            f"--zap-log-level={sidecar_log_level}",
+            "--zap-log-level=5",
         ]
         log_path = f"/tmp/sidecar-decode-{self.replica_rank}.log"
         logger.info("Launching llm-d routing sidecar: %s (log: %s)", " ".join(cmd), log_path)
@@ -176,11 +171,26 @@ class PDDecodeVLLMHttpServer(vLLMHttpServer):
         }
         headers = {k: v for k, v in epp.items() if not k.startswith(":") and k.lower() != "content-length"}
 
+        print(
+            f"❤️ [PDDecodeVLLMHttpServer] request_id={request_id} "
+            f"sidecar_port={self._sidecar_port} url={url} "
+            f"sidecar_headers_keys={list(epp.keys())} "
+            f"x-prefiller-host-port={epp.get('x-prefiller-host-port')!r} "
+            f"forwarded_headers={list(headers.keys())} "
+            f"body_keys={list(body.keys())}",
+            flush=True,
+        )
+
         import asyncio as _asyncio
 
         session = await self._get_sidecar_session()
         try:
             async with session.request(method, url, json=body, headers=headers) as resp:
+                print(
+                    f"❤️ [PDDecodeVLLMHttpServer] sidecar responded request_id={request_id} "
+                    f"status={resp.status}",
+                    flush=True,
+                )
                 if not resp.ok:
                     error_body = await resp.text()
                     raise RuntimeError(
