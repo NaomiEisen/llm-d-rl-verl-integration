@@ -35,12 +35,12 @@ import logging
 import ray
 from omegaconf import DictConfig, OmegaConf
 
-from llm_d_rl_verl_integration.shared.base_agent_loop_manager import LlmdAgentLoopManager
-from llm_d_rl_verl_integration.shared.llmd_actor import LlmdActor
+from llm_d_rl_verl_integration.base_agent_loop_manager import LlmdAgentLoopManager
+from llm_d_rl_verl_integration.llmd_actor import LlmdActor
 from llm_d_rl_verl_integration.epp_router.llm_client import EPPLLMClient
 from verl.workers.rollout.llm_server import LLMServerClient
 from verl.workers.rollout.replica import RolloutReplicaRegistry
-from llm_d_rl_verl_integration.shared.pd_replica import PDEngineReplicaFactory
+from llm_d_rl_verl_integration.pd_replica import PDEngineReplicaFactory
 
 
 def _load_llmd_pd():

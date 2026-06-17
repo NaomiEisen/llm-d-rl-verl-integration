@@ -129,7 +129,7 @@ EXTRA=(
     '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs'
     # --- llm-d EPP router integration ---
     +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.epp_router.agent_loop_manager.EPPAgentLoopManager
-    +actor_rollout_ref.rollout.custom.epp_config_file=/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config.yaml
+    +actor_rollout_ref.rollout.custom.epp_config_file=/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/config/epp-example-config.yaml
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml
     # +actor_rollout_ref.rollout.custom.epp_grpc_port=9002  # default 9002
     # ---

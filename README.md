@@ -136,7 +136,7 @@ Both integrations support PD (prefill-decode) disaggregation via `rollout.name=v
 
 ### PDPrefillVLLMHttpServer and PDDecodeVLLMHttpServer
 
-Both classes live in `llm_d_rl_verl_integration.shared.pd_replica` and extend verl's `vLLMHttpServer`.  The base class launches a vLLM HTTP server process and exposes `generate()` / `get_server_address()`.  Each subclass overrides specific methods to wire in NIXL and the llm-d sidecar.
+Both classes live in `llm_d_rl_verl_integration.pd_replica` and extend verl's `vLLMHttpServer`.  The base class launches a vLLM HTTP server process and exposes `generate()` / `get_server_address()`.  Each subclass overrides specific methods to wire in NIXL and the llm-d sidecar.
 
 **`PDPrefillVLLMHttpServer`**
 
@@ -160,7 +160,7 @@ The corresponding replica class `PDDecodeEngineReplica` sets `self._engine_role 
 
 ### PDEngineReplicaFactory
 
-`PDEngineReplicaFactory` (in `llm_d_rl_verl_integration.shared.pd_replica`) is **a factory function, not a class**.  It is registered as the `vllm-llmd-pd` backend in verl's `RolloutReplicaRegistry` at import time by each integration's `agent_loop_manager.py`:
+`PDEngineReplicaFactory` (in `llm_d_rl_verl_integration.pd_replica`) is **a factory function, not a class**.  It is registered as the `vllm-llmd-pd` backend in verl's `RolloutReplicaRegistry` at import time by each integration's `agent_loop_manager.py`:
 
 ```python
 RolloutReplicaRegistry.register("vllm-llmd-pd", lambda: PDEngineReplicaFactory)
@@ -190,7 +190,7 @@ These keys are required on top of the base integration config when running in PD
 | `rollout.engine_kwargs.vllm.kv_transfer_config.kv_role` | yes | `kv_both` |
 | `rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager` | yes | `true` |
 | `rollout.custom.sidecar_connector` | no | KV connector type passed to `llm-d-routing-sidecar` (default: `nixlv2`) |
-| `model.external_lib` | yes | `llm_d_rl_verl_integration.shared.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
+| `model.external_lib` | yes | `llm_d_rl_verl_integration.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
 
 `prefill_replicas + decode_replicas` must equal `world_size / tp_size` (total GPU count divided by tensor-parallel size).
 

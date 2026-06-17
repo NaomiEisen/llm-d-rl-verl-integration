@@ -29,7 +29,7 @@ ROLLOUT_TP=${ROLLOUT_TP:-2}
 ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.6}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
-EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config.yaml}
+EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/config/epp-example-config.yaml}
 EPP_ENDPOINTS_FILE=${EPP_ENDPOINTS_FILE:-/tmp/epp-endpoints.yaml}
 
 PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples}

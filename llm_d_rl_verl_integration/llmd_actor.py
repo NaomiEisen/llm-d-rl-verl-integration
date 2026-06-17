@@ -10,7 +10,7 @@ from typing import Any, Optional
 
 import ray
 
-from llm_d_rl_verl_integration.shared.endpoints import write_pd_endpoints, write_rollout_endpoints
+from llm_d_rl_verl_integration.endpoints import write_pd_endpoints, write_rollout_endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ _DEFAULT_EPP_GRPC_PORT = 9002
 _DEFAULT_EPP_HEALTH_PORT = 9003
 _DEFAULT_ENVOY_PORT = 8081
 _BUNDLED_ENVOY_CONFIG = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "llmd_stack", "envoy.yaml"
+    os.path.dirname(os.path.abspath(__file__)), "config", "envoy.yaml"
 )
 
 

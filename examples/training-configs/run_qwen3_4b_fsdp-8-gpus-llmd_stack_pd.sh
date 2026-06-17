@@ -31,7 +31,7 @@ DECODE_REPLICAS=${DECODE_REPLICAS:-2}
 ROLLOUT_GPU_MEM_UTIL=${ROLLOUT_GPU_MEM_UTIL:-0.2}
 ROLLOUT_N=${ROLLOUT_N:-5}
 
-EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/shared/epp-example-config-pd.yaml}
+EPP_CONFIG_FILE=${EPP_CONFIG_FILE:-/tmp/llm-d-rl-verl-integration/llm_d_rl_verl_integration/config/epp-example-config-pd.yaml}
 EPP_ENDPOINTS_FILE=${EPP_ENDPOINTS_FILE:-/tmp/epp-endpoints.yaml}
 
 PROJECT_NAME=${PROJECT_NAME:-verl_grpo_gsm8k_examples_pd}
@@ -147,7 +147,7 @@ EXTRA=(
     '+ray_kwargs.ray_init.runtime_env.env_vars.VERL_FILE_LOGGER_ROOT=/tmp/verl/logs'
     # --- llm-d Envoy+EPP router integration (PD mode) ---
     # register_pd patches _ROLLOUT_REGISTRY in every FSDP worker before get_rollout_class() runs
-    +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.shared.register_pd
+    +actor_rollout_ref.model.external_lib=llm_d_rl_verl_integration.register_pd
     +actor_rollout_ref.rollout.agent.agent_loop_manager_class=llm_d_rl_verl_integration.llmd_stack.agent_loop_manager.EnvoyAgentLoopManager
     +actor_rollout_ref.rollout.custom.epp_config_file=${EPP_CONFIG_FILE}
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=${EPP_ENDPOINTS_FILE}
