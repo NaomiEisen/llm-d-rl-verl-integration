@@ -20,7 +20,7 @@ During each training step verl drives generation through the following component
 This integration replaces two components:
 
 - **`AgentLoopManager`** — extended to start EPP, and optionally Envoy, wrapped with Ray actors pinned to the head node, and to inject a custom `LLMServerClient` into each `AgentLoopWorker`.
-- **`LLMServerClient`** — replaced with `EPPLLMClient` or `EnvoyLLMClient`, both routing through EPP's scoring system (prefix-cache hit rate, KV utilisation, queue depth).
+- **`LLMServerClient`** — replaced with `EPPLLMClient` or `EnvoyLLMClient`, both routing through EPP's scoring system.
 
 ---
 
