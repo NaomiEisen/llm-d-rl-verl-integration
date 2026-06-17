@@ -144,10 +144,10 @@ All integration components default to quiet logging.  Set these env vars to incr
 |---------|-----------|---------|-------------|
 | `VERL_VLLM_LOG_LEVEL` | vLLM inside prefill and decode replicas (`VLLM_LOGGING_LEVEL`) | unset (vLLM default) | `DEBUG` |
 | `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `1-5` |
-| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `1-5` |
+| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `5` |
 | `VERL_ENVOY_LOG_LEVEL` | Envoy proxy (`--log-level`) | `info` | `debug` |
 
-Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.  Use one of the two methods below.
+*Note: Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.*
 
 With *KubeRay* — set in the container spec; vars are present before Ray starts:
 
