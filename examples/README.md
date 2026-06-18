@@ -285,6 +285,21 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
 
 verl's file logger writes per-step training metrics (rewards, loss, timing) to the directory set by `VERL_FILE_LOGGER_ROOT`. In the example commands this is `/tmp/verl/logs` on the **head pod**. Each training step appends a JSON line to a file in that directory — useful for plotting reward curves or diagnosing training instability.
 
+The file path is:
+```
+<VERL_FILE_LOGGER_ROOT>/<trainer.project_name>/<trainer.experiment_name>.jsonl
+```
+
+`trainer.project_name` and `trainer.experiment_name` are Hydra config fields, overridden in the run script via the `PROJECT_NAME` and `EXPERIMENT_NAME` env vars. In the PD example commands above these are set explicitly, for example:
+```bash
+PROJECT_NAME=verl_grpo_gsm8k_examples_pd \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_8gpu \
+```
+which produces:
+```
+/tmp/verl/logs/verl_grpo_gsm8k_examples_pd/qwen3_4b_grpo_vllm_epp_pd_fsdp_8gpu.jsonl
+```
+
 ```bash
 kubectl exec <head-pod> -- tail -f /tmp/verl/logs/*.jsonl
 ```
