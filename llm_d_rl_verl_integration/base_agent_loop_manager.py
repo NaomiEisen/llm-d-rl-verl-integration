@@ -21,6 +21,7 @@ from omegaconf import DictConfig, OmegaConf
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
 
 from verl.experimental.agent_loop.agent_loop import AgentLoopManager
+from verl.utils.ray_utils import auto_await
 from verl.workers.rollout.llm_server import LLMServerClient
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
     # generate_sequences — timed wrapper for gen timeline + per-sample log
     # ------------------------------------------------------------------
 
+    @auto_await
     async def generate_sequences(self, prompts):
         step = int(prompts.meta_info.get("global_steps", -1))
         t_start = time.time()
