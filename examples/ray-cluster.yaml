@@ -22,7 +22,7 @@ spec:
                   - <node-name>
         containers:
         - name: ray-head
-          image: ghcr.io/naomieisen/verl:incubation
+          image: ghcr.io/naomieisen/verl:incubation # Built from docker/Dockerfile.verl-vllm018-llm-d-integration
           imagePullPolicy: Always
           lifecycle:
             postStart:
@@ -170,7 +170,7 @@ spec:
                   - <node-name>
         containers:
         - name: ray-worker
-          image: ghcr.io/naomieisen/verl:incubation
+          image: ghcr.io/naomieisen/verl:incubation # Built from docker/Dockerfile.verl-vllm018-llm-d-integration
           imagePullPolicy: Always
           lifecycle:
             postStart:
@@ -256,7 +256,7 @@ spec:
               cpu: "48"
               memory: "192G"
               nvidia.com/gpu: "8"
-            # --- Option C: 4 GPUs ---
+            # --- Option B: 4 GPUs ---
             # limits:
             #   cpu: "32"
             #   memory: "128G"
