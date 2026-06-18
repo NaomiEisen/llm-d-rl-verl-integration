@@ -158,6 +158,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
     @auto_await
     async def generate_sequences(self, prompts):
         step = int(prompts.meta_info.get("global_steps", -1))
+        validate = bool(prompts.meta_info.get("validate", False))
         t_start = time.time()
         output = await super().generate_sequences(prompts)
         t_end = time.time()
@@ -166,6 +167,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
         self._timeline_buffer.append(json.dumps({
             "phase": "gen",
             "step": step,
+            "validate": validate,
             "start_time": round(t_start, 3),
             "end_time": round(t_end, 3),
             "duration_s": round(t_end - t_start, 3),
@@ -196,7 +198,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
                 ]
             output.meta_info["per_sample_data"] = per_sample
 
-            record: dict = {"step": step}
+            record: dict = {"step": step, "validate": validate}
             for key, val in per_sample.items():
                 if hasattr(val, "tolist"):
                     record[key] = val.tolist()
