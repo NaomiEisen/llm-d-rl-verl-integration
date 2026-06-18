@@ -6,7 +6,7 @@ A 4-GPU option is also available (see below).
 ## Prerequisites
 
 - Kubernetes cluster with GPU nodes
-- KubeRay CRD and operator installed
+- KubeRay CRD and operator installed (see [examples/setting-kuberay.md](setting-kuberay.md) for instructions. )
 
 ## Directory structure
 
@@ -54,6 +54,8 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
@@ -76,7 +78,7 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
-PROJECT_NAME=verl_grpo_gsm8k_examples_pd \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     actor_rollout_ref.rollout.enforce_eager=True \
@@ -100,13 +102,15 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
-### Envoy + EPP — HTTP proxy routing
+### Llm-d stack (Envoy + EPP — HTTP proxy routing)
 
 ```bash
 MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
@@ -121,7 +125,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
-### Envoy + EPP — HTTP proxy routing, PD disaggregated
+### Llm-d stack (Envoy + EPP — HTTP proxy routing, PD disaggregated)
 
 ```bash
 INFER_BACKEND=vllm-llmd-pd \
@@ -129,7 +133,7 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
-PROJECT_NAME=verl_grpo_gsm8k_examples_pd \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_pd_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     actor_rollout_ref.rollout.enforce_eager=True \
@@ -174,6 +178,8 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
@@ -200,6 +206,8 @@ TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 ROLLOUT_GPU_MEM_UTIL=0.6 \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=1 \
@@ -222,7 +230,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
-### Envoy + EPP — HTTP proxy routing
+### Llm-d stack (Envoy + EPP — HTTP proxy routing)
 
 ```bash
 NGPUS_PER_NODE=4 \
@@ -232,6 +240,8 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
@@ -246,7 +256,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
-### Envoy + EPP — HTTP proxy routing, PD disaggregated
+### Llm-d stack (Envoy + EPP — HTTP proxy routing, PD disaggregated)
 
 ```bash
 NGPUS_PER_NODE=4 \
@@ -257,6 +267,8 @@ MODEL_PATH=/tmp/verl/models/Qwen3-4B \
 TRAIN_FILE=/tmp/verl/data/gsm8k/train.parquet \
 TEST_FILE=/tmp/verl/data/gsm8k/test.parquet \
 SAVE_FREQ=-1 \
+PROJECT_NAME=verl_grpo_gsm8k_examples \
+EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_pd_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=1 \
