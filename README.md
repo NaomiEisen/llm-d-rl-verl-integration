@@ -131,6 +131,46 @@ The EPP config must use the PD-aware profile (example in `examples/configmap.yam
 
 ---
 
+## Code structure
+
+```
+.
+├── docker/
+│   └── Dockerfile.verl-vllm018-llm-d-integration  # Image with base verl, EPP, Envoy and sidecar
+│
+├── examples/
+│   ├── README.md          # KubeRay deployment walkthrough — training script examples for all
+│   │                      # four modes (EPP / Envoy × non-PD / PD) and 4-GPU variants
+│   ├── ray-cluster.yaml   # RayCluster manifest — head + worker nodes
+│   └── configmap.yaml     # ConfigMap with two EPP configs:
+│                          #   epp-config.yaml    — standard prefix-cache routing
+│                          #   epp-config-pd.yaml — PD-aware routing
+│
+└── llm_d_rl_verl_integration/           # Python package (pip install -e .)
+    ├── base_agent_loop_manager.py        # LlmdAgentLoopManager base — Both integrations extend this.
+    ├── llmd_actor.py                     # Ray actor pinned to the head node. Starts EPP and
+    │                                     # optionally Envoy as subprocesses, writes the
+    │                                     # endpoints YAML, returns service addresses.
+    ├── endpoints.py                      # Builds the EPP endpoints YAML from vLLM server addresses.
+    ├── pd_replica.py                     # PD-aware vLLM server classes.
+    ├── register_pd.py                    # Imported via model.external_lib to register the
+    │                                     # "vllm-llmd-pd" backend in FSDP worker processes.
+    │
+    ├── epp_router/                       # Integration 1 — EPP direct gRPC routing
+    │   ├── agent_loop_manager.py         # EPPAgentLoopManager: starts LlmdActor and injects EPPLLMClient.
+    │   ├── llm_client.py                 # EPPLLMClient: calls EPP gRPC to pick an endpoint,
+    │   │                                 # then calls actor.generate() on the chosen replica.
+    │   └── grpc_client.py                # Async gRPC ext_proc client.
+    │
+    └── llmd_stack/                       # Integration 2 — Envoy + EPP HTTP proxy routing
+        ├── agent_loop_manager.py         # EnvoyAgentLoopManager: starts LlmdActor, injects EnvoyLLMClient.
+        ├── llm_client.py                 # EnvoyLLMClient: sends all generate() calls as HTTP
+        │                                 # to Envoy; Envoy calls EPP and forwards onward.
+        └── envoy.yaml                    # Envoy config.
+```
+
+---
+
 ## How to run
 
 See [examples/](examples/README.md) for a step-by-step KubeRay deployment walkthrough including manifests, EPP config setup, and training script examples.
