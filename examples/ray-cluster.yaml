@@ -247,6 +247,7 @@ spec:
           #   value: "debug"
 
           resources:
+            # --- Option A: 8 GPUs ---
             limits:
               cpu: "64"
               memory: "256G"
@@ -255,6 +256,15 @@ spec:
               cpu: "48"
               memory: "192G"
               nvidia.com/gpu: "8"
+            # --- Option C: 4 GPUs ---
+            # limits:
+            #   cpu: "32"
+            #   memory: "128G"
+            #   nvidia.com/gpu: "4"
+            # requests:
+            #   cpu: "16"
+            #   memory: "96G"
+            #   nvidia.com/gpu: "4"  
           volumeMounts:
           - mountPath: /dev/shm
             name: dshm

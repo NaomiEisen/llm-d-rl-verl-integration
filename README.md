@@ -57,7 +57,8 @@ When `.generate()` is called on `EPPLLMClient`, it sends a gRPC ext_proc request
 | `rollout.custom.epp_grpc_health_port` | no | `9003` | EPP gRPC health check port |
 | `rollout.custom.epp_pool_name` | no | `file-discovery` | EPP pool name |
 | `rollout.custom.epp_pool_namespace` | no | `default` | EPP pool namespace |
-| `rollout.custom.sidecar_connector` | PD only | — | KV transfer connector (e.g. `nixlv2`) — see [PD Disaggregation](#pd-disaggregation----vllm-llmd-pd) |
+
+Supports PD — see [PD Disaggregation](#pd-disaggregation----vllm-llmd-pd)
 
 ---
 
@@ -126,37 +127,10 @@ Role labels (`llm-d.ai/role: prefill` / `decode`) are written to the EPP endpoin
 | `rollout.custom.sidecar_connector` | no | KV connector type passed to `llm-d-routing-sidecar` (default: `nixlv2`) |
 | `model.external_lib` | yes | `llm_d_rl_verl_integration.register_pd` — registers `vllm-llmd-pd` in FSDP workers |
 
-The EPP config must use the PD-aware profile — `shared/epp-example-config-pd.yaml` — which includes `disagg-profile-handler`, `prefill-filter`, `decode-filter`, and `prefix-based-pd-decider`.  Using the non-PD config causes all requests to be load-balanced across both prefill and decode replicas without role-based routing, and NIXL KV transfer will not happen.
+The EPP config must use the PD-aware profile (example in `examples/configmap.yaml` - `epp-config-pd.yaml`).
 
 ---
 
 ## How to run
 
 See [examples/](examples/README.md) for a step-by-step KubeRay deployment walkthrough including manifests, EPP config setup, and training script examples.
-
----
-
-## Debug logging
-
-All integration components default to quiet logging.  Set these env vars to increase verbosity — either in the shell before launching training, or in the `env:` section of your KubeRay `RayCluster` / `RayJob` container spec.
-
-| Env var | Component | Default | Debug value |
-|---------|-----------|---------|-------------|
-| `VERL_VLLM_LOG_LEVEL` | vLLM inside prefill and decode replicas (`VLLM_LOGGING_LEVEL`) | unset (vLLM default) | `DEBUG` |
-| `VERL_SIDECAR_LOG_LEVEL` | llm-d routing sidecar (`--zap-log-level`) | `0` | `5` |
-| `VERL_EPP_VERBOSITY` | EPP subprocess (`-v`) | `0` | `5` |
-| `VERL_ENVOY_LOG_LEVEL` | Envoy proxy (`--log-level`) | `info` | `debug` |
-
-*Note: Ray actors are spawned as new processes on remote nodes and do not inherit the launching shell's environment.*
-
-With *KubeRay* — set in the container spec; vars are present before Ray starts:
-
-```yaml
-containers:
-  - name: ray-worker
-    env:
-      - name: VERL_VLLM_LOG_LEVEL
-        value: "DEBUG"
-      - name: VERL_EPP_VERBOSITY
-        value: "5"
-```
