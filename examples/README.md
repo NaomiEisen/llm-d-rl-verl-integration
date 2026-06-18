@@ -43,6 +43,7 @@ Exec into the head pod, then run one of the commands below.
 
 ```bash
 kubectl exec -it <head-pod-name> -- bash
+cd /opt/verl/examples/grpo_trainer
 ```
 
 All commands use verl's own `run_qwen3_4b_fsdp.sh` as the base script and pass the integration overrides via `$@`. `hydra.run.dir` is required because the default `./outputs/` path is read-only in the container.
@@ -65,7 +66,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -81,12 +81,10 @@ SAVE_FREQ=-1 \
 PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
-    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=2 \
     actor_rollout_ref.rollout.disaggregation.decode_replicas=2 \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
     trainer.total_training_steps=80 \
@@ -97,7 +95,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -120,7 +117,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -136,12 +132,10 @@ SAVE_FREQ=-1 \
 PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_pd_fsdp_8gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
-    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=2 \
     actor_rollout_ref.rollout.disaggregation.decode_replicas=2 \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
     trainer.total_training_steps=80 \
@@ -152,7 +146,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -189,7 +182,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -209,12 +201,10 @@ SAVE_FREQ=-1 \
 PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_epp_pd_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
-    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=1 \
     actor_rollout_ref.rollout.disaggregation.decode_replicas=1 \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
     trainer.total_training_steps=80 \
@@ -225,7 +215,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -251,7 +240,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_config_file=/etc/llmd-configs/epp-config.yaml \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
@@ -270,12 +258,10 @@ SAVE_FREQ=-1 \
 PROJECT_NAME=verl_grpo_gsm8k_examples \
 EXPERIMENT_NAME=qwen3_4b_grpo_vllm_envoy_pd_fsdp_4gpu \
 bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
-    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.disaggregation.prefill_replicas=1 \
     actor_rollout_ref.rollout.disaggregation.decode_replicas=1 \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_connector=NixlConnector \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.kv_transfer_config.kv_role=kv_both \
-    +actor_rollout_ref.rollout.engine_kwargs.vllm.no_disable_hybrid_kv_cache_manager=true \
     trainer.logger='["console","file"]' \
     trainer.default_local_dir=/tmp/checkpoints \
     trainer.total_training_steps=80 \
@@ -286,7 +272,6 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
-    actor_rollout_ref.rollout.enable_prefix_caching=True \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
