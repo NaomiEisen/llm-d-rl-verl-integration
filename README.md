@@ -1,3 +1,51 @@
+This branch provides dditional metrics!
+---
+
+This branch adds per-step observability data that is not available in stock verl. All output files land in a single configurable directory on the head node.
+
+### What is collected
+
+| File | Written by | Contents |
+|------|-----------|----------|
+| `gen_timeline.jsonl` | `LlmdAgentLoopManager` | Wall-clock start/end timestamp and duration of the generation phase for every training step. Use this to correlate GPU utilisation (from wandb system metrics) with the gen phase. |
+| `per_sample.jsonl` | `LlmdAgentLoopManager` | Per-request `gen_time_s`, `prompt_len`, and `response_len` arrays for every training step. Requires verl branch `verl-only-new-metrics` (adds `per_sample_data` to `AgentLoopManager`). |
+| `endpoint_gpu_map.json` | `LlmdAgentLoopManager` | Maps each vLLM server address to its replica rank and all GPU IDs for that replica. Written once at startup. Use this to join per-sample endpoint data with GPU metrics. |
+
+### Configuration
+
+Both options are set under `rollout.custom`:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `rollout.custom.metrics_dir` | `/tmp/verl` | Directory on the head node where all metrics files are written. |
+| `rollout.custom.metrics_flush_freq` | `10` | Number of training steps to accumulate in memory before flushing to disk. Set to `1` to write after every step. |
+
+### Output formats
+
+**`gen_timeline.jsonl`** — one JSON line per training step:
+```json
+{"phase": "gen", "step": 5, "start_time": 1718000010.312, "end_time": 1718000040.123, "duration_s": 29.811}
+```
+
+**`per_sample.jsonl`** — one JSON line per training step (arrays, one element per request in the batch):
+```json
+{"step": 5, "gen_time_s": [1.2, 0.8, 1.5, ...], "prompt_len": [512, 480, ...], "response_len": [128, 96, ...]}
+```
+
+**`endpoint_gpu_map.json`** — written once at startup. `gpu_uuids` requires `pynvml` to be installed; otherwise only `replica_rank` and `node_ips` are written.
+
+`gpu_uuids` are stable hardware identifiers (immutable across restarts) that map each Ray logical GPU ID to its physical hardware fingerprint, useful for cross-referencing with external GPU monitoring tools:
+```json
+{
+  "10.0.0.1:8080": {
+    "replica_rank": 0,
+    "node_ips": ["10.0.0.1"],
+    "gpu_uuids": ["GPU-abc123...", "GPU-def456..."]
+  }
+}
+```
+---
+
 # llm-d RL verl Integration
 
 Integrates [llm-d](https://github.com/llm-d/llm-d) into [verl](https://github.com/volcengine/verl) RL training rollouts, introducing llm-d's inference router and PD capabilities via llm-d's PD sidecar.
@@ -13,7 +61,7 @@ This repo introduces to approaches:
 
 During each training step verl drives generation through the following component hierarchy:
 
-![verl generate call flow](images/verl-generate-call-flow.png)
+![verl generate call flow](diagrams/verl-generate-call-flow.png)
 
 `LLMServerClient` is the object `AgentLoopWorker` calls for every generation request. verl's default implementation uses `GlobalRequestLoadBalancer` to select replicas by least in-flight requests, with sticky sessions for multi-turn continuity.
 
@@ -31,7 +79,7 @@ This integration replaces two components:
 The point of the integration is to utilize EPP as the routing stategy.
 Each generation request is sent to the **Endpoint Picker Plugin (EPP)** via gRPC ext_proc.  EPP scores all available vLLM replicas (prefix-cache hit rate, queue depth, KV utilisation) and injects the chosen backend address as a header.  The `EPPLLMClient` reads that header and forwards the request directly to the selected vLLM replica.
 
-![epp generate call flow](/images/epp-generate-call-flow.png)
+![epp generate call flow](/diagrams/epp-generate-call-flow.png)
 ### How the lifecycle works
 
 After all vLLM replicas are up:

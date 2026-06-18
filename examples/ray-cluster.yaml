@@ -34,7 +34,7 @@ spec:
                   exec > /tmp/setup_log.txt 2>&1
                   echo "Starting setup..."
 
-                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration
+                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration@additional-metrics
 
                   # Prepare data and prefetch the model.
                   mkdir -p /tmp/verl/hf_cache/datasets
@@ -180,7 +180,7 @@ spec:
                 - -c
                 - |
                   exec > /tmp/setup_log.txt 2>&1
-                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration
+                  pip install --no-deps git+https://github.com/NaomiEisen/llm-d-rl-verl-integration@additional-metrics
                   mkdir -p /tmp/verl/hf_cache/datasets
                   python3 /opt/verl/examples/data_preprocess/gsm8k.py --local_save_dir /tmp/verl/data/gsm8k
                   # Full model weights for FSDP training + vLLM rollout

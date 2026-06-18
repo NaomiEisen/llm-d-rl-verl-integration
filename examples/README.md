@@ -67,6 +67,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -96,6 +97,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -118,6 +120,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -147,6 +150,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -183,6 +187,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -216,6 +221,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -241,6 +247,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.epp_endpoints_file=/tmp/epp-endpoints.yaml \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
@@ -273,6 +280,7 @@ bash /opt/verl/examples/grpo_trainer/run_qwen3_4b_fsdp.sh \
     +actor_rollout_ref.rollout.custom.sidecar_connector=nixlv2 \
     actor_rollout_ref.rollout.disable_log_stats=False \
     '+actor_rollout_ref.rollout.engine_kwargs.vllm.enable_prompt_tokens_details=true' \
+    '+actor_rollout_ref.rollout.custom.metrics_flush_freq=1' \
     'hydra.run.dir=/tmp/hydra-outputs'
 ```
 
