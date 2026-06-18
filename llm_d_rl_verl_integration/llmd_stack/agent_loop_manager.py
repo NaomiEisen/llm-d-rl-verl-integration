@@ -46,6 +46,7 @@ class EnvoyAgentLoopManager(LlmdAgentLoopManager):
 
     def _on_servers_ready(self, server_addresses: list[str]) -> None:
         rollout_cfg = self.rollout_config
+        self._server_addresses = server_addresses
 
         self._stack_actor = LlmdActor.options(
             scheduling_strategy=self.head_node_strategy()
@@ -66,9 +67,14 @@ class EnvoyAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EnvoyAgentLoopManager] Envoy ready at %s", self._envoy_address)
 
     def _create_llm_client(self) -> LLMServerClient:
+        address_to_replica = {
+            addr: f"replica_{i}" for i, addr in enumerate(self._server_addresses)
+        }
+        logger.info("[EnvoyAgentLoopManager] address→replica map: %s", address_to_replica)
         return EnvoyLLMClient(
             config=self.config,
             load_balancer_handle=self.llm_client._load_balancer,
             envoy_address=self._envoy_address,
+            address_to_replica=address_to_replica,
             model_name=self.model_config.path,
         )

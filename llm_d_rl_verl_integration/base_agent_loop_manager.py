@@ -16,6 +16,7 @@ import os
 import time
 from typing import Any
 
+import numpy as np
 import ray
 from omegaconf import DictConfig, OmegaConf
 from ray.util.scheduling_strategies import NodeAffinitySchedulingStrategy
@@ -69,6 +70,8 @@ class LlmdAgentLoopManager(AgentLoopManager):
         self._timeline_buffer: list[str] = []
         self._per_sample_buffer: list[str] = []
         self._steps_since_flush: int = 0
+        # Captured in _performance_metrics before verl aggregates away per-sample timings.
+        self._last_gen_times: np.ndarray | None = None
         logger.info(
             "[LlmdAgentLoopManager] metrics output dir: %s  flush_freq: %d",
             self._metrics_output_dir, self._flush_freq,
@@ -140,8 +143,8 @@ class LlmdAgentLoopManager(AgentLoopManager):
                     uuids.append(uuid.decode("utf-8") if isinstance(uuid, bytes) else uuid)
                 pynvml.nvmlShutdown()
                 result["gpu_uuids"] = uuids
-            except Exception:
-                pass
+            except Exception as e:
+                result["gpu_uuid_error"] = str(e)
             return result
 
         gpu_map = {}
@@ -155,10 +158,16 @@ class LlmdAgentLoopManager(AgentLoopManager):
                     for worker in workers
                 ])
                 node_ips = list({info["node_ip"] for info in worker_infos if "node_ip" in info})
+                logical_ids = [lid for info in worker_infos for lid in info.get("logical_ids", [])]
                 gpu_uuids = [u for info in worker_infos for u in info.get("gpu_uuids", [])]
                 entry = {"replica_rank": i, "node_ips": node_ips}
+                if logical_ids:
+                    entry["logical_ids"] = logical_ids
                 if gpu_uuids:
                     entry["gpu_uuids"] = gpu_uuids
+                errors = [info["gpu_uuid_error"] for info in worker_infos if "gpu_uuid_error" in info]
+                if errors:
+                    entry["gpu_uuid_errors"] = errors
                 gpu_map[addr] = entry
             except Exception:
                 gpu_map[addr] = {"replica_rank": i}
@@ -166,6 +175,18 @@ class LlmdAgentLoopManager(AgentLoopManager):
         with open(out_path, "w") as f:
             json.dump(gpu_map, f, indent=2)
         logger.info("[LlmdAgentLoopManager] endpoint_gpu_map → %s: %s", out_path, gpu_map)
+
+    # ------------------------------------------------------------------
+    # _performance_metrics — capture per-sample gen_time_s before aggregation
+    # ------------------------------------------------------------------
+
+    def _performance_metrics(self, metrics, output):
+        """Capture per-sample generation time before verl reduces metrics to aggregates."""
+        self._last_gen_times = np.array(
+            [metric["generate_sequences"] for chunk in metrics for metric in chunk],
+            dtype=np.float32,
+        )
+        return super()._performance_metrics(metrics, output)
 
     # ------------------------------------------------------------------
     # generate_sequences — timed wrapper for gen timeline + per-sample log
@@ -178,7 +199,7 @@ class LlmdAgentLoopManager(AgentLoopManager):
         output = await super().generate_sequences(prompts)
         t_end = time.time()
 
-        # Accumulate in memory.
+        # Accumulate timeline entry.
         self._timeline_buffer.append(json.dumps({
             "phase": "gen",
             "step": step,
@@ -187,11 +208,37 @@ class LlmdAgentLoopManager(AgentLoopManager):
             "duration_s": round(t_end - t_start, 3),
         }))
 
-        per_sample = output.meta_info.get("per_sample_data")
-        if per_sample is not None:
+        # prompt_len / response_len from verl's final padded attention_mask.
+        # Shape: [batch, prompt_length + response_length]; 1=real token, 0=padding.
+        attention_mask = output.batch["attention_mask"]
+        prompt_width = output.batch["prompts"].shape[1]
+        prompt_len = attention_mask[:, :prompt_width].sum(dim=1).cpu().numpy().astype(np.int32)
+        response_len = attention_mask[:, prompt_width:].sum(dim=1).cpu().numpy().astype(np.int32)
+
+        # gen_time_s is captured in _performance_metrics during super().generate_sequences().
+        gen_time = self._last_gen_times
+
+        # endpoint is stamped by the custom LLM client into TokenOutput.extra_fields.
+        endpoint_raw = output.non_tensor_batch.pop("_llmd_endpoint", None)
+
+        if gen_time is not None:
+            per_sample: dict = {
+                "gen_time_s": gen_time,
+                "prompt_len": prompt_len,
+                "response_len": response_len,
+            }
+            if endpoint_raw is not None:
+                per_sample["endpoint"] = [
+                    str(x) if x is not None else "unknown" for x in endpoint_raw
+                ]
+            output.meta_info["per_sample_data"] = per_sample
+
             record: dict = {"step": step}
             for key, val in per_sample.items():
-                record[key] = val.tolist() if hasattr(val, "tolist") else list(val)
+                if hasattr(val, "tolist"):
+                    record[key] = val.tolist()
+                else:
+                    record[key] = list(val)
             self._per_sample_buffer.append(json.dumps(record))
 
         self._steps_since_flush += 1

@@ -37,12 +37,14 @@ class EnvoyLLMClient(LLMServerClient):
         load_balancer_handle=None,
         *,
         envoy_address: str,
+        address_to_replica: dict[str, str],
         model_name: str,
         **kwargs,
     ):
         super().__init__(config=config, load_balancer_handle=load_balancer_handle, **kwargs)
         base = envoy_address if envoy_address.startswith("http") else f"http://{envoy_address}"
         self._url = f"{base}{_GENERATE_PATH}"
+        self._address_to_replica = address_to_replica
         self._model_name = model_name
         self._max_tokens = int(
             config.actor_rollout_ref.rollout.response_length
@@ -78,8 +80,13 @@ class EnvoyLLMClient(LLMServerClient):
                     f"Envoy returned HTTP {resp.status} for {self._url}"
                 )
             data = await resp.json()
+            endpoint = resp.headers.get("x-gateway-destination-endpoint")
 
-        return _parse_response(data)
+        token_output = _parse_response(data)
+        token_output.extra_fields["_llmd_endpoint"] = (
+            self._address_to_replica.get(endpoint, endpoint) if endpoint else "unknown"
+        )
+        return token_output
 
 
 def _parse_response(data: dict) -> TokenOutput:

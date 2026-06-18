@@ -8,7 +8,7 @@ This branch adds per-step observability data that is not available in stock verl
 | File | Written by | Contents |
 |------|-----------|----------|
 | `gen_timeline.jsonl` | `LlmdAgentLoopManager` | Wall-clock start/end timestamp and duration of the generation phase for every training step. Use this to correlate GPU utilisation (from wandb system metrics) with the gen phase. |
-| `per_sample.jsonl` | `LlmdAgentLoopManager` | Per-request `gen_time_s`, `prompt_len`, and `response_len` arrays for every training step. Requires verl branch `verl-only-new-metrics` (adds `per_sample_data` to `AgentLoopManager`). |
+| `per_sample.jsonl` | `LlmdAgentLoopManager` | Per-request `gen_time_s`, `prompt_len`, and `response_len` arrays for every training step. Computed entirely within the integration — no custom verl branch required. |
 | `endpoint_gpu_map.json` | `LlmdAgentLoopManager` | Maps each vLLM server address to its replica rank and all GPU IDs for that replica. Written once at startup. Use this to join per-sample endpoint data with GPU metrics. |
 
 ### Configuration

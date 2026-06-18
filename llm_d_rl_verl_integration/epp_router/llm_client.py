@@ -31,6 +31,8 @@ class EPPLLMClient(LLMServerClient):
         address_to_handle: ``{server_address: ray_actor_handle}`` map built
             at startup. server_address must match what EPP returns as the
             ``x-gateway-destination-endpoint`` header.
+        address_to_replica: ``{server_address: "replica_N"}`` label map for
+            human-readable endpoint tracking in per-sample metrics.
         model_name: model identifier sent in the EPP request body.
         pd_mode: if True, forward sidecar_headers returned by EPP to
             actor.generate.remote() so PDDecodeVLLMHttpServer can reach the sidecar.
@@ -43,6 +45,7 @@ class EPPLLMClient(LLMServerClient):
         *,
         grpc_addr: str,
         address_to_handle: dict[str, ray.actor.ActorHandle],
+        address_to_replica: dict[str, str],
         model_name: str,
         pd_mode: bool = False,
         **kwargs,
@@ -50,6 +53,7 @@ class EPPLLMClient(LLMServerClient):
         super().__init__(config=config, load_balancer_handle=load_balancer_handle, **kwargs)
         self._grpc_addr = grpc_addr
         self._address_to_handle = address_to_handle
+        self._address_to_replica = address_to_replica
         self._model_name = model_name
         self._pd_mode = pd_mode
         self._epp_client = None  # created on workers after unpickling via __setstate__
@@ -85,7 +89,7 @@ class EPPLLMClient(LLMServerClient):
         if self._pd_mode and sidecar_headers:
             extra_kwargs["sidecar_headers"] = sidecar_headers
 
-        return await actor.generate.remote(
+        token_output: TokenOutput = await actor.generate.remote(
             prompt_ids=prompt_ids,
             sampling_params=sampling_params,
             request_id=request_id,
@@ -93,3 +97,7 @@ class EPPLLMClient(LLMServerClient):
             video_data=video_data,
             **extra_kwargs,
         )
+        # Stamp the replica label so it propagates through TokenOutput.extra_fields
+        # → AgentLoopOutput.extra_fields → non_tensor_batch → LlmdAgentLoopManager.
+        token_output.extra_fields["_llmd_endpoint"] = self._address_to_replica.get(endpoint, endpoint)
+        return token_output

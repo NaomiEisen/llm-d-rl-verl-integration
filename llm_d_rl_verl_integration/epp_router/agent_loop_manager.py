@@ -78,6 +78,9 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         # Model name for EPP / generate body.
         self._model_name = self.model_config.path
 
+        # Store for use in _create_llm_client.
+        self._server_addresses = server_addresses
+
         # Build address → actor handle map.
         # server_addresses[i] is the address for replica_rank i;
         # vLLMReplica names its node-0 server actor "vllm_server_{i}_0".
@@ -110,11 +113,16 @@ class EPPAgentLoopManager(LlmdAgentLoopManager):
         logger.info("[EPPAgentLoopManager] EPP ready at %s", self._grpc_addr)
 
     def _create_llm_client(self) -> LLMServerClient:
+        address_to_replica = {
+            addr: f"replica_{i}" for i, addr in enumerate(self._server_addresses)
+        }
+        logger.info("[EPPAgentLoopManager] address→replica map: %s", address_to_replica)
         return EPPLLMClient(
             config=self.config,
             load_balancer_handle=self.llm_client._load_balancer,
             grpc_addr=self._grpc_addr,
             address_to_handle=self._address_to_handle,
+            address_to_replica=address_to_replica,
             model_name=self._model_name,
             pd_mode=self._pd_mode,
         )
