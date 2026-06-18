@@ -110,42 +110,13 @@ class LlmdAgentLoopManager(AgentLoopManager):
     # ------------------------------------------------------------------
 
     def _write_endpoint_gpu_map(self, server_addresses: list[str]) -> None:
-        """Write endpoint → replica rank + node IPs + GPU UUIDs map, once at startup.
-
-        For each replica, queries every vLLM worker actor via __ray_call__ to collect:
-          - Ray logical GPU IDs (from get_accelerator_ids())
-          - Hardware UUIDs (via pynvml) — stable identifiers for cross-referencing
-            with external GPU monitoring tools (nvidia-smi, DCGM, etc.)
-
-        pynvml is optional: if not installed, only replica_rank and node_ips are written.
-        """
+        """Write endpoint → replica rank + Ray-assigned GPU IDs map, once at startup."""
         from verl.utils.device import get_resource_name
         resource_name = get_resource_name()
 
         def _query_worker_gpu_info(_, rn=resource_name):
-            import os as _os
             import ray as _ray
-            logical_ids = _ray.get_runtime_context().get_accelerator_ids().get(rn, [])
-            node_ip = _ray.util.get_node_ip_address()
-            result = {"node_ip": node_ip, "logical_ids": logical_ids}
-            try:
-                import pynvml
-                # Map Ray logical indices to physical GPU indices via CUDA_VISIBLE_DEVICES,
-                # since nvmlDeviceGetHandleByIndex expects physical driver indices.
-                cuda_visible = _os.environ.get("CUDA_VISIBLE_DEVICES", "")
-                physical_ids = [int(x) for x in cuda_visible.split(",") if x.strip().isdigit()]
-                pynvml.nvmlInit()
-                uuids = []
-                for logical_id in logical_ids:
-                    physical_idx = physical_ids[int(logical_id)] if physical_ids else int(logical_id)
-                    handle = pynvml.nvmlDeviceGetHandleByIndex(physical_idx)
-                    uuid = pynvml.nvmlDeviceGetUUID(handle)
-                    uuids.append(uuid.decode("utf-8") if isinstance(uuid, bytes) else uuid)
-                pynvml.nvmlShutdown()
-                result["gpu_uuids"] = uuids
-            except Exception as e:
-                result["gpu_uuid_error"] = str(e)
-            return result
+            return _ray.get_runtime_context().get_accelerator_ids().get(rn, [])
 
         gpu_map = {}
         for i, addr in enumerate(server_addresses):
@@ -153,22 +124,14 @@ class LlmdAgentLoopManager(AgentLoopManager):
             try:
                 handle = ray.get_actor(actor_name)
                 workers = ray.get(handle.__ray_call__.remote(lambda self: self.workers))
-                worker_infos = ray.get([
+                worker_gpu_ids = ray.get([
                     worker.__ray_call__.remote(_query_worker_gpu_info)
                     for worker in workers
                 ])
-                node_ips = list({info["node_ip"] for info in worker_infos if "node_ip" in info})
-                logical_ids = [lid for info in worker_infos for lid in info.get("logical_ids", [])]
-                gpu_uuids = [u for info in worker_infos for u in info.get("gpu_uuids", [])]
-                entry = {"replica_rank": i, "node_ips": node_ips}
-                if logical_ids:
-                    entry["logical_ids"] = logical_ids
-                if gpu_uuids:
-                    entry["gpu_uuids"] = gpu_uuids
-                errors = [info["gpu_uuid_error"] for info in worker_infos if "gpu_uuid_error" in info]
-                if errors:
-                    entry["gpu_uuid_errors"] = errors
-                gpu_map[addr] = entry
+                gpu_map[addr] = {
+                    "replica_rank": i,
+                    "gpu_ids": [gpu_id for gpu_ids in worker_gpu_ids for gpu_id in gpu_ids],
+                }
             except Exception:
                 gpu_map[addr] = {"replica_rank": i}
         out_path = os.path.join(self._metrics_output_dir, "endpoint_gpu_map.json")
